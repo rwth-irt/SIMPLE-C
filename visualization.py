@@ -7,8 +7,10 @@ def np_to_pointcloud(frame_in):
     frame = frame_in[~(np.isnan(frame_in).any(axis=1))]  # remove nans from frame_in
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(frame[:, :3])
-    colors = np.zeros((len(frame), 3))
-    colors[:, 0] = frame[:, 3] / 255
+    colors = np.zeros((len(frame), 3)) # irrelevant points black
+    colors[frame[:, 3] == 1, 0] = 1 # N brightest points have a 1 -> red
+    colors[frame[:, 3] == 2, 1] = 1 # points in biggest cluster have a 2 -> yellow
+    # colors[:, 0] = frame[:, 3] / np.max(frame[:, 3]) # red brightness for intensity
     pcd.colors = o3d.utility.Vector3dVector(colors)
     return pcd
 
