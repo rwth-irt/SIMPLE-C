@@ -11,34 +11,55 @@ filename = (
 frames = bag_to_numpy(filename)
 
 
-def process(frames):
+def get_cluster_centers_per_frame(
+    frames,  # input points: frames[frame_index, point_index] = [x,y,z,intensity]
+    N_highest_intensity=30,  # the N points with highest intens. used for DBSCAN clustering
+    DBSCAN_epsilon=0.1,  # in meters, as is LIDAR output (TODO: is that correct?)
+    DBSCAN_min_samples=4,  # obvious
+):
     # per frame, get the indices of the N points with highest intensity
-    N = 30 # TODO params
-    brightest_indices = np.argsort(-frames[:, :, 3], axis=1)[:, :N]
+    brightest_indices = np.argsort(-frames[:, :, 3], axis=1)[:, :N_highest_intensity]
 
-    # output classes
-    frames[:, :, 3] = 0  # 0: standard
+    # mark points for visualization, rewriting the intensity channel in `frames`
+    frames[:, :, 3] = 0  # 0 -> any point
     for i in range(len(frames)):
-        frames[i, brightest_indices[i], 3] = 1 # 1: N with highest intensity
+        frames[i, brightest_indices[i], 3] = 1  # 1 -> N with highest intensity
 
     # get selected points in extra array
-    brightest_points = np.zeros((len(frames), N, 4))
+    brightest_points = np.zeros((len(frames), N_highest_intensity, 4))
     for i, (sel, frame) in enumerate(zip(brightest_indices, frames)):
         brightest_points[i] = frame[sel]
-        # don't know how to do this with one of those billion np functions, select, take, take_along_axis
-    
+        # TODO don't know how to do this with one of those billion np functions, select, take, take_along_axis
+
+    cluster_centers_per_frame = []
     for i in range(len(frames)):
         # perform DBSCAN per frame
-        # eps is in meter, as lidar output is
-        clusterlabels = DBSCAN(eps=.1, min_samples=4).fit_predict(brightest_points[i, :, :3]) # TODO params!
-        values, counts = np.unique(clusterlabels, return_counts=True)
-        biggest_cluster = values[np.argmax(counts)]
-        if biggest_cluster >= 0:
-            # mark points for visualization
-            frames[i, brightest_indices[i, clusterlabels == biggest_cluster], 3] = 2
+        clusterlabels = DBSCAN(
+            eps=DBSCAN_epsilon, min_samples=DBSCAN_min_samples
+        ).fit_predict(
+            brightest_points[i, :, :3]  # :3, without intensity
+        )
 
-    # return out
+        # get centroids of clusters and mark them for visualization
+        centers = []
+        for clusterlabel in np.unique(clusterlabels):
+            if clusterlabel == -1:
+                continue  # ignore noise
+            centers.append(
+                np.mean(
+                    frames[
+                        i, brightest_indices[i, clusterlabels == clusterlabel], :3
+                    ],  # :3, without intensity
+                    axis=0,
+                )
+            )
+            # mark points as 2 -> "in cluster" for visualization
+            frames[i, brightest_indices[i, clusterlabels == clusterlabel], 3] = 2
+        cluster_centers_per_frame.append(centers)
+
+    return cluster_centers_per_frame
 
 
-process(frames)
+centers = get_cluster_centers_per_frame(frames)
+
 visualize_animation(frames)
