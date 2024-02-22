@@ -46,6 +46,9 @@ def visualize_animation(frames):
 
     vis.create_window()
     vis.add_geometry(np_to_pointcloud(frames[0]))
+    # TODO bug: this frame is not removed.
+    # but if I try to do so, open3d crashes. Annoying...
+
     vis.poll_events()
     vis.update_renderer()
     vis.register_key_callback(ord("K"), _callback)  # apparently, not all keys do work!
