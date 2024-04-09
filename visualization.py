@@ -24,25 +24,34 @@ _i = -1  # index of current frame to show
 _last = None  # last frame's geometry, if exists
 _frames = None  # list of all frame geometry objects
 _markers = None  # list of marker centroids (one per frame, or None)
+_last_marker = None
 
 
 def _callback(vis):
-    global _i, _last
-    vs = vis.get_view_status()
+    global _i, _last, _last_marker
+    first_time = not _last
+    vs = vis.get_view_status()  # cache current view to restore after changing objects
+    _i = (_i + 1) % len(_frames)
+    new = np_to_pointcloud(_frames[_i])
+    vis.add_geometry(new, reset_bounding_box=True)
     if _last:
         vis.remove_geometry(_last)
-    _i = (_i + 1) % len(_frames)
-    _last = np_to_pointcloud(_frames[_i])
-    vis.add_geometry(_last, reset_bounding_box=True)
-    marker_radius = 0.025
+    _last = new
+
+    # add marker for this frame if needed
+    marker_radius = 0.1
+    if _last_marker:  # remove last marker in any case if present
+        vis.remove_geometry(_last_marker)
     if _markers and _markers[_i] is not None:
-        marker = o3d.geometry.TriangleMesh.create_box(
-            width=2 * marker_radius, height=2 * marker_radius, depth=2 * marker_radius
-        )
-        marker.translate(_markers[_i][:3] - marker_radius)
+        marker = o3d.geometry.TriangleMesh.create_sphere(radius=marker_radius)
+        marker.translate(_markers[_i][:3])
+        marker.paint_uniform_color([1, 0.706, 0])
         vis.add_geometry(marker)
-        # TODO remove old markers
-    vis.set_view_status(vs)
+        _last_marker = marker
+
+    if not first_time:
+        vis.set_view_status(vs)
+    vis.update_renderer()
     return True
 
 
@@ -57,12 +66,13 @@ def visualize_animation(frames, markers=None):
     vis = o3d.visualization.VisualizerWithKeyCallback()
 
     vis.create_window()
-    vis.add_geometry(np_to_pointcloud(frames[0]))
     # TODO bug: this frame is not removed. I do not want it...
     # but if I try to do so, open3d crashes. Annoying...
 
     vis.poll_events()
     vis.update_renderer()
     vis.register_key_callback(ord("K"), _callback)  # apparently, not all keys do work!
+    _callback(vis)
+    print("PRESS K FOR THE NEXT FRAME!")
     vis.run()
     vis.destroy_window()
