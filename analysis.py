@@ -9,17 +9,13 @@ def get_cluster_centers_per_frame(
     DBSCAN_epsilon=0.15,  # in meters, as is LIDAR output (TODO: is that correct?)
     DBSCAN_min_samples=3,
 ):
-    # mark points for visualization, rewriting the intensity channel in `frames`
-    # 0: any point
-    # 1: for the N points with highest intensity
-    # 2: part of a cluster
 
     intensity_threshold = np.max(frames[..., 3]) * rel_intensity_threshold
     point_selection = frames[..., 3] >= intensity_threshold
 
     visualization = np.copy(frames)
-    visualization[:, :, 3] = 0  # reset intensity data
-    visualization[point_selection, 3] = 1  # 1 for selected points
+    visualization[:, :, 3] = -2 # any point
+    visualization[point_selection, 3] = -1  # 1 for selected/bright points
 
     cluster_centers_per_frame = []
     for i in range(len(frames)):
@@ -41,7 +37,9 @@ def get_cluster_centers_per_frame(
             # mark cluster points for visualization
             in_frame_indices = np.nonzero(point_selection[i])[0]
             in_cluster_indices = in_frame_indices[clusterlabels == clusterlabel]
-            visualization[i, in_cluster_indices, 3] = 2
+            visualization[i, in_cluster_indices, 3] = (
+                clusterlabel # starting at 0
+            )  # -> values 0..N are for clusters with respective index
 
         cluster_centers_per_frame.append(np.array(centers))
         # returns list of np array with one row per centroid, containing:
@@ -70,3 +68,4 @@ def filter_clusters_1(centers, max_distance):
             biggest_centers[i] = None
 
     return biggest_centers
+    # TODO version 2 now returns the indices of the clusters instead of the point itself

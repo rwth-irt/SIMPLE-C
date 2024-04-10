@@ -36,13 +36,26 @@ def calc(params):
         DBSCAN_min_samples=int(params["DBSCAN min samples"]),
     )
 
-    # chosen_centers = filter_clusters_1(centers, max_distance=0.3)
-    chosen_centers = filter_clusters_2(
+    selection_indices = filter_clusters_2(
         centers,
         max_distance=params["maximum neighbor distance"],
         min_velocity=params["minimum velocity"],
         velocity_lookahead=int(params["velocity lookahead"]),
     )
+    chosen_centers = []
+    for frame_i in range(len(selection_indices)):
+        if selection_indices[frame_i] is None:
+            chosen_centers.append(None)
+        else:
+            chosen_centers.append(centers[frame_i][selection_indices[frame_i]])
+        # currently, visualization contains indices of clusters
+        # for o3d visualization, we want to convert this to codes meaning "any cluster" or "chosen cluster"
+        chosen_cluster_selection = (
+            visualization[frame_i, :, 3] == selection_indices[frame_i]
+        )
+        any_cluster_selection = visualization[frame_i, :, 3] >= 0  # any cluster
+        visualization[frame_i, any_cluster_selection, 3] = 1
+        visualization[frame_i, chosen_cluster_selection, 3] = 2
 
     print("showing open3d visualization, this will block the settings UI")
     print("press escape to close 3d view, then enter new values")

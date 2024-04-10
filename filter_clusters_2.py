@@ -28,11 +28,12 @@ def calc_velocity(origin, future, neighbor_radius):
 
 
 def filter_clusters_2(clusters, max_distance, min_velocity, velocity_lookahead=3):
-    # per frame, find most relevant cluster
-    selection = []
+    # per frame, choose the best cluster
+    # return list of their indices or None
+    selection_indices = []
     for frame_i in range(len(clusters) - velocity_lookahead):
         if len(clusters[frame_i]) == 0:
-            selection.append(None)
+            selection_indices.append(None)
             continue  # no clusters in this frame
 
         # calculate velocity for each cluster
@@ -59,15 +60,14 @@ def filter_clusters_2(clusters, max_distance, min_velocity, velocity_lookahead=3
         c_i = c_i[sortargs_size]
         # sort by velocity
         sortargs_vel = np.argsort(velocities, kind="stable")
-        c_i = c_i[sortargs_vel]
+        best_index = sortargs_vel[-1]
 
-        # pick best one
-        best = c_i[-1]
+        # has best one velocity != -1? Otherwise, all have been excluded
         if velocities[sortargs_vel[-1]] == -1:
-            selection.append(None)  # no candidate found: all were excluded
+            selection_indices.append(None)  
         else:
-            selection.append(best)
+            selection_indices.append(best_index)
 
     # add None for last frames, no velocity calculation possible
-    selection += [None] * velocity_lookahead
-    return selection
+    selection_indices += [None] * velocity_lookahead
+    return selection_indices

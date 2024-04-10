@@ -2,16 +2,23 @@
 import open3d as o3d
 import numpy as np
 
+colors = {
+    -2: np.array([0.5, 0.5, 0.5]),  # irrelevant points             GRAY
+    -1: np.array([1.0, 0.0, 0.0]),  # bright points                 RED
+    1: np.array([0.0, 1.0, 0.0]),  # points in cluster              GREEN
+    2: np.array([0.0, 0.0, 1.0]),  # points in selected cluster     BLUE
+}
+marker_color = [1, 0.706, 0]
+
 
 def np_to_pointcloud(frame_in):
     frame = frame_in[~(np.isnan(frame_in).any(axis=1))]  # remove nans from frame_in
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(frame[:, :3])
-    colors = np.zeros((len(frame), 3))  # irrelevant points black
-    colors[frame[:, 3] == 1, 0] = 1  # N brightest points have a 1 -> red
-    colors[frame[:, 3] == 2, 1] = 1  # points in biggest cluster have a 2 -> yellow
-    # colors[:, 0] = frame[:, 3] / np.max(frame[:, 3]) # red brightness for intensity
-    pcd.colors = o3d.utility.Vector3dVector(colors)
+    point_colors = np.zeros((len(frame), 3))  # irrelevant points black
+    for ci in colors:
+        point_colors[frame[:, 3] == ci] = colors[ci]
+    pcd.colors = o3d.utility.Vector3dVector(point_colors)
     return pcd
 
 
@@ -47,7 +54,7 @@ def _callback(vis):
     if _markers and _markers[_i] is not None:
         marker = o3d.geometry.TriangleMesh.create_sphere(radius=marker_radius)
         marker.translate(_markers[_i][:3])
-        marker.paint_uniform_color([1, 0.706, 0])
+        marker.paint_uniform_color(marker_color)
         vis.add_geometry(marker)
         _last_marker = marker
 
