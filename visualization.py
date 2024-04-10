@@ -20,11 +20,13 @@ def visualize_frame(frame_in):
     o3d.visualization.draw_geometries([np_to_pointcloud(frame_in)])
 
 
-_i = -1  # index of current frame to show
-_last = None  # last frame's geometry, if exists
-_frames = None  # list of all frame geometry objects
-_markers = None  # list of marker centroids (one per frame, or None)
-_last_marker = None
+def reset():
+    global _i, _last, _frames, _markers, _last_marker
+    _i = -1  # index of current frame to show
+    _last = None  # last frame's geometry, if exists
+    _frames = None  # list of all frame geometry objects
+    _markers = None  # list of marker centroids (one per frame, or None)
+    _last_marker = None
 
 
 def _callback(vis):
@@ -56,6 +58,7 @@ def _callback(vis):
 
 
 def visualize_animation(frames, markers=None):
+    reset()
     global _frames, _markers
     assert (not markers) or len(frames) == len(markers)
 
@@ -69,7 +72,9 @@ def visualize_animation(frames, markers=None):
 
     vis.poll_events()
     vis.update_renderer()
-    vis.register_key_callback(ord("K"), _callback)  # apparently, not all keys are available
+    vis.register_key_callback(
+        ord("K"), _callback
+    )  # apparently, not all keys are available
     _callback(vis)
     print("PRESS K FOR THE NEXT FRAME!")
     vis.run()

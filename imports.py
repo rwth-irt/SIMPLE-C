@@ -25,7 +25,9 @@ def bag_to_numpy(filename, topic, only_frames=None, cache=True):
     cache_filename = filename + "_cache.npz"
     if cache and Path(cache_filename).is_file():
         print("using cache")
-        return np.load(cache_filename)["data"]
+        data = np.load(cache_filename)["data"]
+        print("import done")
+        return data
 
     print("starting import")
     out = []

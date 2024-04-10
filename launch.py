@@ -9,8 +9,10 @@ from analysis import (
 from filter_clusters_2 import filter_clusters_2
 import numpy as np
 from pprint import pprint
+from tkinter_ui import create_gui
 
 # MAIN
+# TODO make filenames/topics configurable via console/UI
 filename1 = (
     "/home/max/UNI/Job_IRT/LIDAR/temporal_reflector/temporal_reflector_disturbance.bag",
     "rslidar_points_ref",  # topic
@@ -24,13 +26,38 @@ filename2 = (
 
 frames = bag_to_numpy(*filename2)
 
-centers, visualization = get_cluster_centers_per_frame(
-    frames, rel_intensity_threshold=0.7, DBSCAN_epsilon=0.3, DBSCAN_min_samples=4
-)
 
-# chosen_centers = filter_clusters_1(centers, max_distance=0.3)
-chosen_centers = filter_clusters_2(
-    centers, max_distance=0.3, min_velocity=0.15, velocity_lookahead=5
-)
+def calc(params):
+    print("calculating using new params")
+    centers, visualization = get_cluster_centers_per_frame(
+        frames,
+        rel_intensity_threshold=params["relative intensity threshold"],
+        DBSCAN_epsilon=params["DBSCAN epsilon"],
+        DBSCAN_min_samples=int(params["DBSCAN min samples"]),
+    )
 
-visualize_animation(visualization, chosen_centers)
+    # chosen_centers = filter_clusters_1(centers, max_distance=0.3)
+    chosen_centers = filter_clusters_2(
+        centers,
+        max_distance=params["maximum neighbor distance"],
+        min_velocity=params["minimum velocity"],
+        velocity_lookahead=int(params["velocity lookahead"]),
+    )
+
+    print("showing open3d visualization, this will block the settings UI")
+    print("press escape to close 3d view, then enter new values")
+    visualize_animation(visualization, chosen_centers)
+    print("returning to settings UI")
+
+
+create_gui(
+    params={
+        "relative intensity threshold": 0.7,
+        "DBSCAN epsilon": 0.4,
+        "DBSCAN min samples": 9,
+        "maximum neighbor distance": 0.4,
+        "minimum velocity": 0.2,
+        "velocity lookahead": 8,
+    },
+    callback=calc,
+)
