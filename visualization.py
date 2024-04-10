@@ -66,12 +66,10 @@ def visualize_animation(frames, markers=None):
     vis = o3d.visualization.VisualizerWithKeyCallback()
 
     vis.create_window()
-    # TODO bug: this frame is not removed. I do not want it...
-    # but if I try to do so, open3d crashes. Annoying...
 
     vis.poll_events()
     vis.update_renderer()
-    vis.register_key_callback(ord("K"), _callback)  # apparently, not all keys do work!
+    vis.register_key_callback(ord("K"), _callback)  # apparently, not all keys are available
     _callback(vis)
     print("PRESS K FOR THE NEXT FRAME!")
     vis.run()

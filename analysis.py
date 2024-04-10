@@ -60,7 +60,7 @@ def get_cluster_centers_per_frame(
     return cluster_centers_per_frame, visualization
 
 
-def filter_clusters_1(centers):
+def filter_clusters_1(centers, max_distance):
     # per frame, get cluster with most points
     biggest_centers = []
     for i in range(len(centers)):
@@ -68,7 +68,6 @@ def filter_clusters_1(centers):
         biggest_centers.append(centers[i][biggest_index])
 
     # drop centers where the next one is too far away
-    max_distance = 0.3
     for i in range(len(biggest_centers) - 1):
         dist_to_next = np.linalg.norm(
             biggest_centers[i][:3] - biggest_centers[i + 1][:3]
