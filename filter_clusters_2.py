@@ -11,30 +11,43 @@ def get_nearest_neighbor_index(origin, candidates, radius):
     return -1
 
 
-def filter_clusters_2(clusters, max_distance, min_velocity):
+def calc_velocity(origin, future, neighbor_radius):
+    # calculates velocity for one center `origin`
+    # given future centroids
+    assert len(future) > 0
+    deltas = []
+    current = origin
+    for next_candidates in future:
+        nni = get_nearest_neighbor_index(current, next_candidates, neighbor_radius)
+        if nni == -1:
+            return -1  # can not calculate
+        nn = next_candidates[nni]  # next neighbor
+        deltas.append(np.linalg.norm(current - nn))
+        current = nn
+    return np.mean(deltas)
+
+
+def filter_clusters_2(clusters, max_distance, min_velocity, velocity_lookahead=3):
     # per frame, find most relevant cluster
     selection = []
-    for frame_i in range(len(clusters) - 1):
-        # TODO this is currently hardcoded for velocity lookahead 1
+    for frame_i in range(len(clusters) - velocity_lookahead):
         if len(clusters[frame_i]) == 0:
             selection.append(None)
             continue  # no clusters in this frame
 
         # calculate velocity for each cluster
-        velocities = []
-        for center_i in range(len(clusters[frame_i])):
-            origin = clusters[frame_i][center_i]
-            nni = get_nearest_neighbor_index(
-                origin, clusters[frame_i + 1], max_distance
-            )
-            if nni == -1:  # no neighbor found
-                velocities.append(-1)  # exclude clusters without neighbors
-            else:
-                v = np.linalg.norm((clusters[frame_i + 1][nni] - origin)[:3])
-                velocities.append(v)
-        velocities = np.array(velocities)
+        velocities = np.array(
+            [
+                calc_velocity(
+                    c,
+                    clusters[frame_i + 1 : frame_i + 1 + velocity_lookahead],
+                    max_distance,
+                )
+                for c in clusters[frame_i]
+            ]
+        )
 
-        # exclude stationary clustersnp.array(velocities)
+        # exclude stationary clusters
         velocities[velocities < min_velocity] = -1
 
         # now choose *largest* cluster with *highest velocity*
@@ -54,5 +67,7 @@ def filter_clusters_2(clusters, max_distance, min_velocity):
             selection.append(None)  # no candidate found: all were excluded
         else:
             selection.append(best)
-    selection.append(None)  # add None for last frame, no velocity calculation possible
+
+    # add None for last frames, no velocity calculation possible
+    selection += [None] * velocity_lookahead
     return selection
