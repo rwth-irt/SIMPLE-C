@@ -4,3 +4,5 @@ __pycache__
 *.bag
 *.npy
 data
+video*/pngs
+*.mp4
