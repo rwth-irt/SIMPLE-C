@@ -65,7 +65,7 @@ def calc(params):
 
 
 create_gui(
-    params={
+    {
         "relative intensity threshold": 0.7,
         "DBSCAN epsilon": 0.4,
         "DBSCAN min samples": 9,
@@ -73,6 +73,6 @@ create_gui(
         "minimum velocity": 0.05,
         "velocity lookahead": 8,
         "max. vector angle [deg]": 120,
-    },
+    }, # TODO put default parameters into separate file
     callback=calc,
 )
