@@ -30,7 +30,6 @@ def bag_to_numpy(rosbag_filename, topic_filter=None):
     bag = rosbag.Bag(rosbag_filename)
     topics = []
     for topic, topictuple in bag.get_type_and_topic_info().topics.items():
-        print(f"Found topic {topic} with dtype {topictuple.msg_type}")
         if (not topictuple.msg_type.endswith("PointCloud2")) or (topic_filter and topic not in topic_filter):
             print(f"Ignoring topic {topic}.")
             continue
@@ -72,15 +71,3 @@ def write_to_numpy_file(filename, data):
     print("writing cache file... (this may take several minutes)")
     np.savez_compressed(filename, **data)
     print("writing done")
-
-
-def read_from_numpy_file(filename):
-    """
-    Read data from (compressed) numpy cache file
-    :param filename: filename of numpy file to read from
-    :return: Dictionary { topic_name : data_numpy_array }
-    """
-    print("reading numpy file...")
-    data = np.load(filename)
-    print("reading done")
-    return data

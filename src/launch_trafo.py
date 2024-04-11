@@ -45,7 +45,7 @@ def get_centers(frames, params, visualize: bool):
     :param visualize: bool whether to show the open3d visualization of the analysis results
     :return: a list of the found cluster centers as numpy arrays
     """
-    print("calculating using new params")
+    print("calculating cluster centers")
     centers = get_cluster_centers_per_frame(
         frames,
         rel_intensity_threshold=params["relative intensity threshold"],
