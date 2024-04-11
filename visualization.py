@@ -48,15 +48,22 @@ def _callback(vis):
     _last = new
 
     # add marker for this frame if needed
-    marker_radius = 0.1
+    marker_radius = 0.14
     if _last_marker:  # remove last marker in any case if present
-        vis.remove_geometry(_last_marker)
+        vis.remove_geometry(_last_marker[0])
+        vis.remove_geometry(_last_marker[1])
     if _markers and _markers[_i] is not None:
         marker = o3d.geometry.TriangleMesh.create_sphere(radius=marker_radius)
+        marker2 = o3d.geometry.TriangleMesh.create_cylinder(
+            radius=marker_radius / 4, height=marker_radius * 160
+        )
         marker.translate(_markers[_i][:3])
+        marker2.translate(_markers[_i][:3])
         marker.paint_uniform_color(marker_color)
+        marker2.paint_uniform_color(marker_color)
         vis.add_geometry(marker)
-        _last_marker = marker
+        vis.add_geometry(marker2)
+        _last_marker = (marker, marker2)
 
     if not first_time:
         vis.set_view_status(vs)
