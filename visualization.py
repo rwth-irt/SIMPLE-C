@@ -9,6 +9,7 @@ colors = {
     2: np.array([0.0, 0.0, 1.0]),  # points in selected cluster     BLUE
 }
 marker_color = [1, 0.706, 0]
+trace_color = [0.5, 0.706 / 2, 0]  # like marker, but darker
 
 
 def np_to_pointcloud(frame_in):
@@ -28,19 +29,25 @@ def visualize_frame(frame_in):
 
 
 def reset():
-    global _i, _last, _frames, _markers, _last_marker
+    global _i, _last, _frames, _markers, _last_marker, _trace
     _i = -1  # index of current frame to show
     _last = None  # last frame's geometry, if exists
     _frames = None  # list of all frame geometry objects
     _markers = None  # list of marker centroids (one per frame, or None)
     _last_marker = None
+    _trace = []
 
 
 def _callback(vis):
-    global _i, _last, _last_marker
+    global _i, _last, _last_marker, _trace
     first_time = not _last
     vs = vis.get_view_status()  # cache current view to restore after changing objects
     _i = (_i + 1) % len(_frames)
+    if _i == 0:
+        # clear old trace, restarting
+        for m in _trace:
+            vis.remove_geometry(m)
+        _trace = []
     new = np_to_pointcloud(_frames[_i])
     vis.add_geometry(new, reset_bounding_box=True)
     if _last:
@@ -53,17 +60,29 @@ def _callback(vis):
         vis.remove_geometry(_last_marker[0])
         vis.remove_geometry(_last_marker[1])
     if _markers and _markers[_i] is not None:
+        # marker: sphere and cylinder
         marker = o3d.geometry.TriangleMesh.create_sphere(radius=marker_radius)
         marker2 = o3d.geometry.TriangleMesh.create_cylinder(
             radius=marker_radius / 4, height=marker_radius * 160
         )
+
         marker.translate(_markers[_i][:3])
         marker2.translate(_markers[_i][:3])
+
         marker.paint_uniform_color(marker_color)
         marker2.paint_uniform_color(marker_color)
+
         vis.add_geometry(marker)
         vis.add_geometry(marker2)
+
         _last_marker = (marker, marker2)
+
+        # trace
+        trace_marker = o3d.geometry.TriangleMesh.create_sphere(radius=marker_radius / 2)
+        trace_marker.translate(_markers[_i][:3])
+        trace_marker.paint_uniform_color(trace_color)
+        vis.add_geometry(trace_marker)
+        _trace.append(trace_marker)
 
     if not first_time:
         vis.set_view_status(vs)
