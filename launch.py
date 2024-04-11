@@ -41,6 +41,7 @@ def calc(params):
         max_distance=params["maximum neighbor distance"],
         min_velocity=params["minimum velocity"],
         velocity_lookahead=int(params["velocity lookahead"]),
+        max_vector_angle_rad=2 * np.pi * params["max. vector angle [deg]"] / 360,
     )
     chosen_centers = []
     for frame_i in range(len(selection_indices)):
@@ -69,8 +70,9 @@ create_gui(
         "DBSCAN epsilon": 0.4,
         "DBSCAN min samples": 9,
         "maximum neighbor distance": 0.4,
-        "minimum velocity": 0.2,
+        "minimum velocity": 0.05,
         "velocity lookahead": 8,
+        "max. vector angle [deg]": 120,
     },
     callback=calc,
 )

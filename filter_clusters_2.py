@@ -11,23 +11,36 @@ def get_nearest_neighbor_index(origin, candidates, radius):
     return -1
 
 
-def calc_velocity(origin, future, neighbor_radius):
+def calc_velocity(origin, future, neighbor_radius, max_vector_angle_rad):
     # calculates velocity for one center `origin`
     # given future centroids
+    # if no neighbor within distance `neighbor_radius` is found or the
+    # angle between two movement steps is greater than `max_vector_angle_rad`, -1 is returned instead
     assert len(future) > 0
     deltas = []
     current = origin
+    last_movement = None
     for next_candidates in future:
         nni = get_nearest_neighbor_index(current, next_candidates, neighbor_radius)
         if nni == -1:
             return -1  # can not calculate
         nn = next_candidates[nni]  # next neighbor
-        deltas.append(np.linalg.norm(current - nn))
+        movement = (nn - current)[:3]
+        deltas.append(np.linalg.norm(movement))
+        if last_movement is not None:
+            # calculate angle between vectors
+            angle_rad = np.arccos(
+                np.dot(movement, last_movement)
+                / (np.linalg.norm(movement) * np.linalg.norm(last_movement))
+            )
+            if angle_rad > max_vector_angle_rad:
+                return -1
+        last_movement = movement
         current = nn
     return np.mean(deltas)
 
 
-def filter_clusters_2(clusters, max_distance, min_velocity, velocity_lookahead=3):
+def filter_clusters_2(clusters, max_distance, min_velocity, velocity_lookahead, max_vector_angle_rad):
     # per frame, choose the best cluster
     # return list of their indices or None
     selection_indices = []
@@ -43,6 +56,7 @@ def filter_clusters_2(clusters, max_distance, min_velocity, velocity_lookahead=3
                     c,
                     clusters[frame_i + 1 : frame_i + 1 + velocity_lookahead],
                     max_distance,
+                    max_vector_angle_rad
                 )
                 for c in clusters[frame_i]
             ]
@@ -64,7 +78,7 @@ def filter_clusters_2(clusters, max_distance, min_velocity, velocity_lookahead=3
 
         # has best one velocity != -1? Otherwise, all have been excluded
         if velocities[sortargs_vel[-1]] == -1:
-            selection_indices.append(None)  
+            selection_indices.append(None)
         else:
             selection_indices.append(best_index)
 
