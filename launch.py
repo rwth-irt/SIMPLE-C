@@ -1,78 +1,38 @@
+import argparse
+import json
+import pathlib
+
 from imports import bag_to_numpy
-from visualization import visualize_animation
-from analysis import (
-    get_cluster_centers_per_frame,
-    filter_clusters_1,
-    # select_N_brightest_per_frame,
-    # select_with_threshold,
-)
-from filter_clusters_2 import filter_clusters_2
-import numpy as np
-from pprint import pprint
+from launch_trafo import get_centers
 from tkinter_ui import create_gui
 
-# MAIN
-# TODO make filenames/topics configurable via console/UI
-filename1 = (
-    "/home/max/UNI/Job_IRT/LIDAR/temporal_reflector/temporal_reflector_disturbance.bag",
-    "rslidar_points_ref",  # topic
-)
-filename2 = (
-    "/home/max/UNI/Job_IRT/LIDAR/Calibration_Target_Deneb/calibration_target_1.bag",
-    "/rslidar_points_vr_v",  # topic
-)
-# get topics using `rosbag info filename.bag`
 
+def main():
+    parser = argparse.ArgumentParser(description="Multi-Lidar alignment calibration")
+    parser.add_argument("--rosbag", help="Mandatory, location of the rosbag file to process", required=True)
+    parser.add_argument("--param_file", help="Location of parameter JSON file, otherwise default will be used",
+                        default=pathlib.Path(__file__).parent.absolute() / "default_params.json")
+    parser.add_argument("--visualize", action="store_true", help="Flag to enable visualization")
+    parser.add_argument("-t", "--topic", action="append",
+                        help="Topic in rosbag file to use (can be specified multiple times for multiple sensors)")
+    # TODO use all topics with point clouds if not specified
 
-frames = bag_to_numpy(*filename2)
+    args = parser.parse_args()
 
+    with open(args.param_file, "r") as f:
+        params = json.load(f)
 
-def calc(params):
-    print("calculating using new params")
-    centers, visualization = get_cluster_centers_per_frame(
-        frames,
-        rel_intensity_threshold=params["relative intensity threshold"],
-        DBSCAN_epsilon=params["DBSCAN epsilon"],
-        DBSCAN_min_samples=int(params["DBSCAN min samples"]),
-    )
+    frames = bag_to_numpy(args.rosbag, args.topic[0])  # TODO currently using only one topic
 
-    selection_indices = filter_clusters_2(
-        centers,
-        max_distance=params["maximum neighbor distance"],
-        min_velocity=params["minimum velocity"],
-        velocity_lookahead=int(params["velocity lookahead"]),
-        max_vector_angle_rad=2 * np.pi * params["max. vector angle [deg]"] / 360,
-    )
-    chosen_centers = []
-    for frame_i in range(len(selection_indices)):
-        if selection_indices[frame_i] is None:
-            chosen_centers.append(None)
-        else:
-            chosen_centers.append(centers[frame_i][selection_indices[frame_i]])
-        # currently, visualization contains indices of clusters
-        # for o3d visualization, we want to convert this to codes meaning "any cluster" or "chosen cluster"
-        chosen_cluster_selection = (
-            visualization[frame_i, :, 3] == selection_indices[frame_i]
+    if args.visualize:
+        create_gui(
+            params,
+            callback=lambda p: get_centers(frames, p, True),
         )
-        any_cluster_selection = visualization[frame_i, :, 3] >= 0  # any cluster
-        visualization[frame_i, any_cluster_selection, 3] = 1
-        visualization[frame_i, chosen_cluster_selection, 3] = 2
-
-    print("showing open3d visualization, this will block the settings UI")
-    print("press escape to close 3d view, then enter new values")
-    visualize_animation(visualization, chosen_centers)
-    print("returning to settings UI")
+    else:
+        centers = get_centers(frames, params, False)
+        # TODO do sth with the centers
 
 
-create_gui(
-    {
-        "relative intensity threshold": 0.7,
-        "DBSCAN epsilon": 0.4,
-        "DBSCAN min samples": 9,
-        "maximum neighbor distance": 0.4,
-        "minimum velocity": 0.05,
-        "velocity lookahead": 8,
-        "max. vector angle [deg]": 120,
-    }, # TODO put default parameters into separate file
-    callback=calc,
-)
+if __name__ == "__main__":
+    main()
