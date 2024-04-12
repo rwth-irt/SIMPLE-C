@@ -7,8 +7,9 @@ import numpy as np
 from imports import bag_to_numpy, write_to_numpy_file
 from src.locate_reflector.find_cluster_centers import get_cluster_centers_per_frame
 from src.locate_reflector.track_marker import track_marker
-from src.transformation.calculate_transformation import filter_locations, calc_transformation
 from src.tracking_visualization import prepare_tracking_visualization, visualize_tracking_animation
+from src.trafo_visualization import visualize_trafo
+from src.transformation.calculate_transformation import filter_locations, calc_transformation
 from tkinter_ui import create_gui
 
 
@@ -23,9 +24,10 @@ def main():
                         help="Disable automatically writing a cache file after import from rosbag")
     parser.add_argument("--no-read-cache", action="store_true",
                         help="Disable trying to automatically read cache file if found")
-    parser.add_argument("--transformation", help="Pass a comma-separated pair of sensors/topic names"
-                                                 "to calculate a transformation for."
-                                                 "E.g. --transformation 'topic1,topic1'")
+    parser.add_argument("--transformation",
+                        help="Pass a comma-separated pair of sensors/topic names to calculate a transformation for."
+                             "Example: --transformation 'topic1,topic2'"
+                             "The resulting transformation transforms topic1 to the coordinates of topic2.")
     parser.add_argument("--visualize-trafo", action="store_true",
                         help="Show open3d visualization of points with applied transformation")
 
@@ -94,7 +96,13 @@ def main():
         print("t =")
         print(t)
         if args.visualize_trafo:
-            pass
+            pts0 = data[trafo_topics[0]][0, ..., :3]  # 1st frame, only xyz
+            pts1 = data[trafo_topics[1]][0, ..., :3]
+            # transform points
+            pts0tr = (R @ pts0.T).T + t
+            # show
+            print("Opening open3d visualization of result...")
+            visualize_trafo([pts0tr, pts1])
 
 
 def visualize(data, params_initial):

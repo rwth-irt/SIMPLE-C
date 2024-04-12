@@ -58,7 +58,3 @@ def calc_transformation(P: np.array, Q: np.array):
     t = q_bar - R @ p_bar
 
     return R, t
-
-
-def transform(point, R, t):
-    return R @ point + t

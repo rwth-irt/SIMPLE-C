@@ -14,7 +14,8 @@ marker_color = [1, 0.706, 0]
 trace_color = [0.5, 0.706 / 2, 0]  # like marker, but darker
 
 
-def np_to_pointcloud(frame_in):
+def np_to_pointcloud_with_colors(frame_in):
+    # TODO move to visualization_utils file, move visualization to subdir
     frame = frame_in[~(np.isnan(frame_in).any(axis=1))]  # remove nans from frame_in
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(frame[:, :3])
@@ -27,7 +28,7 @@ def np_to_pointcloud(frame_in):
 
 def visualize_frame(frame_in):
     # show a single frame
-    o3d.visualization.draw_geometries([np_to_pointcloud(frame_in)])
+    o3d.visualization.draw_geometries([np_to_pointcloud_with_colors(frame_in)])
 
 
 def reset():
@@ -50,7 +51,7 @@ def _callback(vis):
         for m in _trace:
             vis.remove_geometry(m)
         _trace = []
-    new = np_to_pointcloud(_frames[_i])
+    new = np_to_pointcloud_with_colors(_frames[_i])
     vis.add_geometry(new, reset_bounding_box=True)
     if _last:
         vis.remove_geometry(_last)
