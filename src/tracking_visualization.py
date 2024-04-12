@@ -118,7 +118,7 @@ def visualize_tracking_animation(frames, markers=None):
 def prepare_tracking_visualization(selection_indices, visualization):
     """
     Expects visualization to contain cluster indices in intensity channel of points.
-    The intensity channel is used as indicator for rendering color in the o3d UI, see visualization.py.
+    The intensity channel is used as indicator for rendering color in the o3d UI, see tracking_visualization.py.
     For given index of the selected cluster per frame (`selection_indices`), set the
     respectively selected cluster's value to 2 for highlighting and all others to 1.
 

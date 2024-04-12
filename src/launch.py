@@ -8,7 +8,7 @@ from imports import bag_to_numpy, write_to_numpy_file
 from src.locate_reflector.find_cluster_centers import get_cluster_centers_per_frame
 from src.locate_reflector.track_marker import track_marker
 from src.transformation.calculate_transformation import filter_locations, calc_transformation
-from src.visualization import prepare_tracking_visualization, visualize_tracking_animation
+from src.tracking_visualization import prepare_tracking_visualization, visualize_tracking_animation
 from tkinter_ui import create_gui
 
 
