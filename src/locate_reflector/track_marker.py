@@ -104,6 +104,10 @@ def track_marker(centers, params):
         velocity_lookahead=int(params["velocity lookahead"]),
         max_vector_angle_rad=2 * np.pi * params["max. vector angle [deg]"] / 360,
     )
+    # TODO: Idea for uncertainty of marker position
+    #  Maybe calculate an uncertainty score by checking if the number of points in the cluster is close to
+    #  the number in adjacent frames. If by accident the tracker cluster is merging with some close disturbance cluster,
+    #  this will allow to at least reduce the uncertainty. Otherwise, maybe just exclude such clusters at all.
 
     # extract chosen centers by indices
     chosen_centers = []
