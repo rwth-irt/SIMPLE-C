@@ -95,7 +95,7 @@ def track_marker(centers, params):
     :param centers: list of cluster centers as obtained from `get_cluster_centers_per_frame`
     :param params: dict with parameters, e.g. obtained by reading a parameter JSON file.
     :param visualize: bool whether to show the open3d visualization of the analysis results
-    :return: a list of the found cluster centers as numpy arrays
+    :return: a list of the found cluster centers as numpy arrays (only containing x y z values!)
     """
     selection_indices = filter_clusters_2(
         centers,
@@ -115,6 +115,6 @@ def track_marker(centers, params):
         if selection_indices[frame_i] is None:
             chosen_centers.append(None)
         else:
-            chosen_centers.append(centers[frame_i][selection_indices[frame_i]])
+            chosen_centers.append(centers[frame_i][selection_indices[frame_i], :3])  # only x,y,z
 
     return selection_indices, chosen_centers

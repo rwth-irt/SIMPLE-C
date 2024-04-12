@@ -2,6 +2,8 @@
 import numpy as np
 import open3d as o3d
 
+o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Info)
+
 colors = {
     -2: np.array([0.5, 0.5, 0.5]),  # irrelevant points             GRAY
     -1: np.array([1.0, 0.0, 0.0]),  # bright points                 RED
@@ -90,7 +92,7 @@ def _callback(vis):
     return True
 
 
-def visualize_animation(frames, markers=None):
+def visualize_tracking_animation(frames, markers=None):
     reset()
     global _frames, _markers
     assert (not markers) or len(frames) == len(markers)
@@ -98,9 +100,7 @@ def visualize_animation(frames, markers=None):
     _frames = frames
     _markers = markers
 
-    o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Info)
     vis = o3d.visualization.VisualizerWithKeyCallback()
-
     vis.create_window()
 
     vis.poll_events()
@@ -115,7 +115,7 @@ def visualize_animation(frames, markers=None):
     reset()  # free RAM
 
 
-def prepare_visualization(selection_indices, visualization):
+def prepare_tracking_visualization(selection_indices, visualization):
     """
     Expects visualization to contain cluster indices in intensity channel of points.
     The intensity channel is used as indicator for rendering color in the o3d UI, see visualization.py.
