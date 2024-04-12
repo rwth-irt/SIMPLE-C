@@ -1,6 +1,6 @@
 # pip install open3d-cpu numpy
-import open3d as o3d
 import numpy as np
+import open3d as o3d
 
 colors = {
     -2: np.array([0.5, 0.5, 0.5]),  # irrelevant points             GRAY
@@ -112,3 +112,27 @@ def visualize_animation(frames, markers=None):
     print("PRESS K FOR THE NEXT FRAME!")
     vis.run()
     vis.destroy_window()
+    reset()  # free RAM
+
+
+def prepare_visualization(selection_indices, visualization):
+    """
+    Expects visualization to contain cluster indices in intensity channel of points.
+    The intensity channel is used as indicator for rendering color in the o3d UI, see visualization.py.
+    For given index of the selected cluster per frame (`selection_indices`), set the
+    respectively selected cluster's value to 2 for highlighting and all others to 1.
+
+    **Alters visualization**, which can then be passed to the UI.
+
+    :param selection_indices: list with index of selected cluster per frame
+    :param visualization: lidar data numpy array, but with visualization info in intensity, as obtained \
+    from `get_cluster_centers_per_frame(create_visualization=True)`
+    :return: nothing, writes into visualization array
+    """
+    for frame_i in range(len(selection_indices)):
+        # currently, visualization contains indices of clusters
+        # for o3d visualization, we want to convert this to codes meaning "any cluster" or "chosen cluster"
+        chosen_cluster_selection = visualization[frame_i, :, 3] == selection_indices[frame_i]
+        any_cluster_selection = visualization[frame_i, :, 3] >= 0  # any cluster
+        visualization[frame_i, any_cluster_selection, 3] = 1
+        visualization[frame_i, chosen_cluster_selection, 3] = 2

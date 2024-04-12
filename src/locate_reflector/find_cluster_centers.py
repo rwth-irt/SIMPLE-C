@@ -1,6 +1,5 @@
 import numpy as np
 from sklearn.cluster import DBSCAN
-from pprint import pprint
 
 
 def get_cluster_centers_per_frame(
