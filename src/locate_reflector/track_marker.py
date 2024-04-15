@@ -41,6 +41,17 @@ def calc_velocity(origin, future, neighbor_radius, max_vector_angle_rad):
 
 
 def filter_clusters_2(clusters, max_distance, min_velocity, velocity_lookahead, max_vector_angle_rad):
+    """
+    TODO
+
+    :param clusters: List with (possibly empty, meaning no clusters) numpy array
+        containing cluster center means
+    :param max_distance:
+    :param min_velocity:
+    :param velocity_lookahead:
+    :param max_vector_angle_rad:
+    :return:
+    """
     # per frame, choose the best cluster
     # return list of their indices or None
     selection_indices = []

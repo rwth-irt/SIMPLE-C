@@ -3,13 +3,26 @@ from sklearn.cluster import DBSCAN
 
 
 def get_cluster_centers_per_frame(
-    frames,  # input points: frames[frame_index, point_index] = [x,y,z,intensity]
-    rel_intensity_threshold,
-    DBSCAN_epsilon=0.15,  # in meters, as is LIDAR output (TODO: is that correct?)
-    DBSCAN_min_samples=3,
-    create_visualization=False,
+        frames,  # input points: frames[frame_index, point_index] = [x,y,z,intensity]
+        rel_intensity_threshold,
+        DBSCAN_epsilon=0.15,  # in meters, as is LIDAR output (TODO: is that correct?)
+        DBSCAN_min_samples=3,
+        create_visualization=False,
 ):
+    """
+    TODO
 
+    :param frames:
+    :param rel_intensity_threshold:
+    :param DBSCAN_epsilon:
+    :param DBSCAN_min_samples:
+    :param create_visualization:
+    :return: List with (possibly empty, meaning no clusters) numpy array
+        containing mean values of points in respective cluster (x_mean, y_mean, z_mean, intensity_mean).
+        If `create_visualization`, then also a visualization array is returned in which clusters have been marked
+        with their index replacing the original value in the intensity channel (see `prepare_tracking_visualization` in
+        tracking_visualization.py)
+    """
     intensity_threshold = np.max(frames[..., 3]) * rel_intensity_threshold
     point_selection = frames[..., 3] >= intensity_threshold
 
@@ -21,6 +34,10 @@ def get_cluster_centers_per_frame(
     cluster_centers_per_frame = []
     for i in range(len(frames)):
         frame_points = frames[i, point_selection[i]]
+        if len(frame_points) == 0:
+            # no bright points in this frame
+            cluster_centers_per_frame.append(np.array([]))  # empty array: no centers
+            continue
         # perform DBSCAN per frame
         clusterlabels = DBSCAN(
             eps=DBSCAN_epsilon, min_samples=DBSCAN_min_samples
