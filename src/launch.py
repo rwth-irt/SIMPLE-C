@@ -5,14 +5,14 @@ import sys
 
 import numpy as np
 
-from rosbag_import.rosbag_to_numpy import bag_to_numpy, write_to_numpy_file
 from locate_reflector.find_cluster_centers import get_cluster_centers_per_frame
 from locate_reflector.track_marker import track_marker
+from rosbag_import.rosbag_to_numpy import bag_to_numpy, write_to_numpy_file
 from rosbag_import.rosbag_utils import print_rosbag_info
-from visualization.tracking_visualization import prepare_tracking_visualization, visualize_tracking_animation
-from visualization.trafo_visualization import visualize_trafo
 from transformation.calculate_transformation import filter_locations, calc_transformation
 from visualization.tkinter_ui import create_gui
+from visualization.tracking_visualization import prepare_tracking_visualization, visualize_tracking_animation
+from visualization.trafo_visualization import visualize_trafo
 
 
 def main():
@@ -121,15 +121,15 @@ def visualize(frames, params_initial):
     :param params_initial: initial parameters to be loaded to UI
     """
 
-    def visualize_with_params(frames, params):
+    def visualize_with_params(_frames, params):
         """
         gets **frames for single sensor** and params, calls track_marker and opens open3d visualization.
         Is called as callback from tkinter UI once the "calculate" button is pressed.
-        :param frames: frames for single sensor/topic
+        :param _frames: frames for single sensor/topic
         :param params: parameter dict
         """
         centers, visualization = get_cluster_centers_per_frame(
-            frames,
+            _frames,
             rel_intensity_threshold=params["relative intensity threshold"],
             DBSCAN_epsilon=params["DBSCAN epsilon"],
             DBSCAN_min_samples=int(params["DBSCAN min samples"]),
