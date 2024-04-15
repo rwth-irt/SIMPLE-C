@@ -22,8 +22,6 @@ def bag_to_numpy(rosbag_filename, topic_filter=None):
         contain PointCloud2 data.
     :return: Dictionary { topic_name : data_numpy_array }
     """
-    """
-    """
     data = {}
     msg_counts = {}
     current_index = {}

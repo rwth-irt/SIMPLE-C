@@ -1,12 +1,14 @@
 import argparse
 import json
 import pathlib
+import sys
 
 import numpy as np
 
 from rosbag_import.rosbag_to_numpy import bag_to_numpy, write_to_numpy_file
 from locate_reflector.find_cluster_centers import get_cluster_centers_per_frame
 from locate_reflector.track_marker import track_marker
+from rosbag_import.rosbag_utils import print_rosbag_info
 from visualization.tracking_visualization import prepare_tracking_visualization, visualize_tracking_animation
 from visualization.trafo_visualization import visualize_trafo
 from transformation.calculate_transformation import filter_locations, calc_transformation
@@ -17,7 +19,8 @@ def main():
     parser = argparse.ArgumentParser(description="Multi-Lidar alignment calibration")
     parser.add_argument("--rosbag", help="Mandatory, location of the rosbag file to process", required=True)
     parser.add_argument("--param-file", help="Location of parameter JSON file, otherwise default will be used")
-    # TODO add --show-topics
+    parser.add_argument("--show-topics", action="store_true",
+                        help="Print information about the topics found in the given rosbag file and exit.")
     parser.add_argument("--visualize-tracking",
                         help="Specify a topic name for which marker tracking is visualized.")
     parser.add_argument("--no-write-cache", action="store_true",
@@ -25,13 +28,17 @@ def main():
     parser.add_argument("--no-read-cache", action="store_true",
                         help="Disable trying to automatically read cache file if found")
     parser.add_argument("--transformation",
-                        help="Pass a comma-separated pair of sensors/topic names to calculate a transformation for."
-                             "Example: --transformation 'topic1,topic2'"
+                        help="Pass a comma-separated pair of sensors/topic names to calculate a transformation for. "
+                             "Example: --transformation 'topic1,topic2' "
                              "The resulting transformation transforms topic1 to the coordinates of topic2.")
     parser.add_argument("--visualize-trafo", action="store_true",
                         help="Show open3d visualization of points with applied transformation")
 
     args = parser.parse_args()
+
+    if args.show_topics:
+        print_rosbag_info(args.rosbag)
+        sys.exit()
 
     # load parameters (first because loading data might take long)
     paramfile = pathlib.Path(__file__).parent.parent.absolute() / "default_params.json"
