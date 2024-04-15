@@ -4,7 +4,7 @@ import pathlib
 
 import numpy as np
 
-from imports import bag_to_numpy, write_to_numpy_file
+from rosbag_to_numpy import bag_to_numpy, write_to_numpy_file
 from src.locate_reflector.find_cluster_centers import get_cluster_centers_per_frame
 from src.locate_reflector.track_marker import track_marker
 from src.tracking_visualization import prepare_tracking_visualization, visualize_tracking_animation
@@ -105,23 +105,22 @@ def main():
             visualize_trafo([pts0tr, pts1])
 
 
-def visualize(data, params_initial):
+def visualize(frames, params_initial):
     """
-    For each topic in data, a tkinter param selection will be shown, from which the open3d visualization can be started.
-    :param data: data dict, frames per sensor
+    For a frames array of **a single sensor**, a tkinter param selection will be shown,
+    from which the open3d visualization can be started.
+
+    :param frames: sensor data to use
     :param params_initial: initial parameters to be loaded to UI
     """
 
     def visualize_with_params(frames, params):
         """
-        gets frames for single sensor and params, calls track_marker and opens open3d visualization.
+        gets **frames for single sensor** and params, calls track_marker and opens open3d visualization.
         Is called as callback from tkinter UI once the "calculate" button is pressed.
         :param frames: frames for single sensor/topic
         :param params: parameter dict
         """
-        print(f"\nCURRENT TOPIC: {topic}")
-        print("close parameter chooser to go to next topic")
-
         centers, visualization = get_cluster_centers_per_frame(
             frames,
             rel_intensity_threshold=params["relative intensity threshold"],
@@ -137,14 +136,10 @@ def visualize(data, params_initial):
         visualize_tracking_animation(visualization, marker_pos)
         print("returning to settings UI")
 
-    for topic in data:
-        create_gui(
-            params_initial,
-            callback=lambda params_from_gui: visualize_with_params(data[topic], params_from_gui),
-        )
-        # due to this problem https://stackoverflow.com/q/75927299 this will fail to open the next tkinter param
-        # chooser window if one open3d window had been open in the past. This seems to be a problem in tkinter.
-        # so please just go to the right topic for the visualization, let it crash and open the program again.
+    create_gui(
+        params_initial,
+        callback=lambda params_from_gui: visualize_with_params(frames, params_from_gui),
+    )
 
 
 if __name__ == "__main__":
