@@ -49,10 +49,30 @@ def bag_to_numpy(rosbag_filename, topic_filter=None):
         # receiving the messages for all topics/sensors mixed, sort them into the corresponding numpy array
         msg_data = np.array(point_cloud2.read_points_list(msg, skip_nans=False))
         if topic not in data:
-            # create np array to hold the output data, assuming that all frames have the same amount of points
+            # this is the first frame for this sensor. We did not know the number of points per frame yet and
+            # use the number of this frame assuming that all frames have the same amount of points
+            # -> we can now create the numpy array to hold the data
             data[topic] = np.zeros((msg_counts[topic], *msg_data.shape), dtype=np.float64)
             current_index[topic] = 0
-        data[topic][current_index[topic]] = msg_data
+        if len(msg_data) != data[topic].shape[1]:
+            # receiving a frame which does not have the same number of points as the first one
+            print()
+            print(
+                f"          WARNING: Frame {current_index[topic]} of sensor/topic {topic} has different "
+                f"size than first one.\n"
+                f"                   (length {len(msg_data)} instead of {data[topic].shape[1]})")
+            # multiple possible actions depending on how many frames have different size
+            if len(msg_data) > data[topic].shape[1]:
+                # crop the current frame
+                print("                   cropping current frame")
+                data[topic][current_index[topic]] = msg_data[:data[topic].shape[1]]
+            else:
+                # missing data, fill with zeros
+                print("                   padding current frame with zeros")
+                data[topic][current_index[topic], :len(msg_data)] = msg_data
+                # just write msg_data, data is zero-initialized
+        else:
+            data[topic][current_index[topic]] = msg_data
         current_index[topic] += 1
 
     bag.close()
