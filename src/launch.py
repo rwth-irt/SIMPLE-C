@@ -4,7 +4,7 @@ import pathlib
 
 import numpy as np
 
-from rosbag_to_numpy import bag_to_numpy, write_to_numpy_file
+from rosbag_import.rosbag_to_numpy import bag_to_numpy, write_to_numpy_file
 from locate_reflector.find_cluster_centers import get_cluster_centers_per_frame
 from locate_reflector.track_marker import track_marker
 from visualization.tracking_visualization import prepare_tracking_visualization, visualize_tracking_animation
