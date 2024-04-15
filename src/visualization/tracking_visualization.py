@@ -1,8 +1,15 @@
 # pip install open3d-cpu numpy
+import tempfile
+from pathlib import Path
+
 import numpy as np
 import open3d as o3d
 
 o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Info)
+
+# for snapshot creation
+snapshot_dir = None
+
 
 colors = {
     -2: np.array([0.5, 0.5, 0.5]),  # irrelevant points             GRAY
@@ -105,14 +112,22 @@ def visualize_tracking_animation(frames, markers=None):
 
     vis.poll_events()
     vis.update_renderer()
-    vis.register_key_callback(
-        ord("K"), _callback
-    )  # apparently, not all keys are available
+    vis.register_key_callback(ord("K"), _callback)
+    vis.register_key_callback(ord("J"), on_capture_key)
     _callback(vis)
-    print("PRESS K FOR THE NEXT FRAME!")
+    print("PRESS K FOR THE NEXT FRAME! (Press J to save snapshot and proceed to next frame for creating videos.)")
     vis.run()
     vis.destroy_window()
     reset()  # free RAM
+
+
+def on_capture_key(vis: o3d.visualization.VisualizerWithKeyCallback):
+    global snapshot_dir
+    _callback(vis)
+    if not snapshot_dir:
+        snapshot_dir = tempfile.mkdtemp(prefix="tracking_snapshots_")
+        print(f"WRITING SNAPSHOTS TO DIRECTORY {snapshot_dir}")
+    vis.capture_screen_image(str(Path(snapshot_dir) / f"frame_{str(_i).zfill(4)}.png"), do_render=True)
 
 
 def prepare_tracking_visualization(selection_indices, visualization):
