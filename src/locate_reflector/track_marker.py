@@ -40,18 +40,28 @@ def calc_velocity(origin, future, neighbor_radius, max_vector_angle_rad):
     return np.mean(deltas)
 
 
-def filter_clusters_2(clusters, max_distance, min_velocity, velocity_lookahead, max_vector_angle_rad):
+def track_marker(clusters, max_distance, min_velocity, velocity_lookahead, max_vector_angle_rad):
     """
-    TODO
+    Tracks the marker for **a single sensor**.
+    Applies multiple constraints to filter out disturbances.
 
-    :param clusters: List with (possibly empty, meaning no clusters) numpy array
-        containing cluster center means
-    :param max_distance:
-    :param min_velocity:
-    :param velocity_lookahead:
-    :param max_vector_angle_rad:
-    :return:
+    :param clusters: List with (possibly empty, meaning no clusters in this frame) numpy array
+        containing cluster center means (as obtained from `get_cluster_centers`)
+    :param max_distance: the maximal distance a cluster may move between two frames to be considered the same
+    :param min_velocity: the minimal movement distance (averaged over `velocity_lookahead` frames!) a cluster must
+      have to be considered to be the reflector and not a static disturbance
+    :param velocity_lookahead: number of frames to consider for calculating velocity and where the cluster must be
+      continuously identified without being lost
+    :param max_vector_angle_rad: the maximal angle between the movement vectors of adjacent frames of a cluster.
+      Must be fulfilled for all `velocity_lookahead` frames for valid clusters.
+    :return: a list of the found cluster centers as numpy arrays (only containing x y z values!)
     """
+
+    # TODO: Idea for uncertainty of marker position
+    #  Maybe calculate an uncertainty score by checking if the number of points in the cluster is close to
+    #  the number in adjacent frames. If by accident the tracker cluster is merging with some close disturbance cluster,
+    #  this will allow to at least reduce the uncertainty. Otherwise, maybe just exclude such clusters at all.
+
     # per frame, choose the best cluster
     # return list of their indices or None
     selection_indices = []
@@ -98,34 +108,12 @@ def filter_clusters_2(clusters, max_distance, min_velocity, velocity_lookahead, 
     return selection_indices
 
 
-def track_marker(centers, params):
-    """
-    Tracks the marker for **a single sensor**.
-    Applies `filter_clusters_2` to given cluster centers and return the chosen centers as array.
-
-    :param centers: list of cluster centers as obtained from `get_cluster_centers_per_frame`
-    :param params: dict with parameters, e.g. obtained by reading a parameter JSON file.
-    :param visualize: bool whether to show the open3d visualization of the analysis results
-    :return: a list of the found cluster centers as numpy arrays (only containing x y z values!)
-    """
-    selection_indices = filter_clusters_2(
-        centers,
-        max_distance=params["maximum neighbor distance"],
-        min_velocity=params["minimum velocity"],
-        velocity_lookahead=int(params["velocity lookahead"]),
-        max_vector_angle_rad=2 * np.pi * params["max. vector angle [deg]"] / 360,
-    )
-    # TODO: Idea for uncertainty of marker position
-    #  Maybe calculate an uncertainty score by checking if the number of points in the cluster is close to
-    #  the number in adjacent frames. If by accident the tracker cluster is merging with some close disturbance cluster,
-    #  this will allow to at least reduce the uncertainty. Otherwise, maybe just exclude such clusters at all.
-
-    # extract chosen centers by indices
-    chosen_centers = []
-    for frame_i in range(len(selection_indices)):
-        if selection_indices[frame_i] is None:
-            chosen_centers.append(None)
+def positions_from_indices(indices, centers):
+    # extract marker position from all centers by using selection_indices
+    marker_pos = []
+    for frame_i in range(len(indices)):
+        if indices[frame_i] is None:
+            marker_pos.append(None)
         else:
-            chosen_centers.append(centers[frame_i][selection_indices[frame_i], :3])  # only x,y,z
-
-    return selection_indices, chosen_centers
+            marker_pos.append(centers[frame_i][indices[frame_i], :3])  # only x,y,z
+    return marker_pos
