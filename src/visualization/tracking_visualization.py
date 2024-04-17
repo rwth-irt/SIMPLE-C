@@ -22,6 +22,10 @@ trace_color = [0.5, 0.706 / 2, 0]  # like marker, but darker
 
 
 def np_to_pointcloud_with_colors(frame_in):
+    """
+    Transforms a numpy frame with [ x y z c ] per point to a colored o3d pointloud.
+    c is the color index as specified in the `colors` dict above.
+    """
     frame = frame_in[~(np.isnan(frame_in).any(axis=1))]  # remove nans from frame_in
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(frame[:, :3])
@@ -48,6 +52,11 @@ def reset():
 
 
 def _callback(vis):
+    """
+    Called by open3d on keypress. Switches to the next frame. Removes last frame's points and optionally markers
+    and addes new ones. Restores the 3d view to the state before swapping point clouds because open3d would usually
+    try to reset the view to the new data.
+    """
     global _i, _last, _last_marker, _trace
     first_time = not _last
     vs = vis.get_view_status()  # cache current view to restore after changing objects
@@ -99,12 +108,23 @@ def _callback(vis):
     return True
 
 
-def visualize_tracking_animation(frames, markers=None):
+def visualize_tracking_animation(visualization, markers=None):
+    """
+    Open an open3d window to visualize the given visualization array and optionally
+    marker positions per frame. In the window, the key K can be pressed to proceed
+    to the next frame and J to save a snapshot and proceed.
+
+    :param visualization: Numpy array with rows being: [ x y z c ] with c being a color
+      index to specify the point's color. The colors will be mapped according to the `colors` dict at the top of
+      this function's file. Use `prepare_tracking_visualization` to create this array.
+    :param markers: None or a list of the same length as visualization. List entries can either be None or an 1d numpy
+      array [ x, y, z ] to use as marker position for the corresponding frame.
+    """
     reset()
     global _frames, _markers
-    assert (not markers) or len(frames) == len(markers)
+    assert (not markers) or len(visualization) == len(markers)
 
-    _frames = frames
+    _frames = visualization
     _markers = markers
 
     vis = o3d.visualization.VisualizerWithKeyCallback()
@@ -132,12 +152,14 @@ def on_capture_key(vis: o3d.visualization.VisualizerWithKeyCallback):
 
 def prepare_tracking_visualization(selection_indices, visualization):
     """
-    Expects visualization to contain cluster indices in intensity channel of points.
-    The intensity channel is used as indicator for rendering color in the o3d UI, see tracking_visualization.py.
-    For given index of the selected cluster per frame (`selection_indices`), set the
-    respectively selected cluster's value to 2 for highlighting and all others to 1.
+    Expects visualization to contain cluster indices in intensity channel of points,
+    as returned by `get_cluster_centers_per_frame`.
 
-    **Alters visualization**, which can then be passed to the UI.
+    For given index of the selected cluster per frame (parameter `selection_indices`),
+    this function sets the respectively selected cluster's color index to 2 (for special highlighting)
+    and all others to 1. Other values are left untouched.
+
+    **Alters visualization**, which can then be passed to `visualize_tracking_animation`.
 
     :param selection_indices: list with index of selected cluster per frame
     :param visualization: lidar data numpy array, but with visualization info in intensity, as obtained \
