@@ -1,4 +1,6 @@
 # pip install --extra-index-url https://rospypi.github.io/simple/ rosbag sensor_msgs geometry_msgs
+# maybe also installing roslz4 (from same pip repo) fixes the insanely bad performance?
+# installing via `conda install -c conda-forge ros-rosbag` might work as well
 
 import sys
 
@@ -39,6 +41,8 @@ def bag_to_numpy(rosbag_filename, topic_filter=None):
     print("starting import")
     i = 0
     for topic, msg, _ in bag.read_messages(topics=topics):
+        # TODO somehow handle time alignment of frames from different sensors?
+
         # print progress
         i += 1
         sys.stdout.write("\r" + f"reading msg {i} / {sum(msg_counts.values())}".rjust(30, " "))

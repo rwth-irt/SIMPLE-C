@@ -32,6 +32,8 @@ def filter_locations(marker_locations, topics):
 
 def calc_transformation(P: np.array, Q: np.array):
     """
+    Kabsch Algorithm https://en.wikipedia.org/wiki/Kabsch_algorithm
+
     Directly following https://igl.ethz.ch/projects/ARAP/svd_rot.pdf
     but without weights (no weighted centroids, no weight matrix W)
 
@@ -58,3 +60,7 @@ def calc_transformation(P: np.array, Q: np.array):
     t = q_bar - R @ p_bar
 
     return R, t
+
+# TODO
+#  use scipy implementation of the Kabsch Algorithm instead, as it offers a sensitivity matrix for the transformation!
+#  https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.transform.Rotation.align_vectors.html
