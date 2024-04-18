@@ -45,6 +45,12 @@ def track_marker(clusters, max_distance, min_velocity, velocity_lookahead, max_v
     Tracks the marker for **a single sensor**.
     Applies multiple constraints to filter out disturbances.
 
+    TODO
+      - explain better.
+      - rename lookahead parameter
+      - go backwards in time from most current input for online variant
+      - move batch processing out of this function, process only a single time-step here.
+
     :param clusters: List with (possibly empty, meaning no clusters in this frame) numpy array
         containing cluster center means (as obtained from `get_cluster_centers`)
     :param max_distance: the maximal distance a cluster may move between two frames to be considered the same
@@ -54,7 +60,9 @@ def track_marker(clusters, max_distance, min_velocity, velocity_lookahead, max_v
       continuously identified without being lost
     :param max_vector_angle_rad: the maximal angle between the movement vectors of adjacent frames of a cluster.
       Must be fulfilled for all `velocity_lookahead` frames for valid clusters.
-    :return: a list of the found cluster centers as numpy arrays (only containing x y z values!)
+    :return: a list containing, per frame, either the **index** of the selected cluster per frame, or
+      one if no cluster was selected. (Use `positions_from_indices` to extract the selected marker positions from the
+      clusters array using the returned index list.)
     """
 
     # TODO: Idea for uncertainty of marker position

@@ -50,7 +50,9 @@ def bag_to_numpy(rosbag_filename, topic_filter=None):
 
         # receiving the messages for all topics/sensors mixed, sort them into the corresponding numpy array
         msg_data = np.array(point_cloud2.read_points_list(msg, skip_nans=False))
-        # TODO: docstring says "For more efficient access use read_points directly.". Is this the performance problem?
+        # TODO:
+        #  docstring says "For more efficient access use read_points directly.". Is this the performance problem?
+        #  or see sensor_msgs.PointCloud2's deserialize_numpy method, which may do what we want.
 
         if topic not in data:
             # this is the first frame for this sensor. We did not know the number of points per frame yet and

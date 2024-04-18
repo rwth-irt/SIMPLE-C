@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def filter_locations(marker_locations, topics):
+def filter_locations(marker_locations: dict[str, list[np.ndarray]], topics: list[str]):
     """
     Returns a filtered copy of `marker_locations` which only contains the points from frames where a location is
     present for each sensor/topic.
@@ -10,8 +10,9 @@ def filter_locations(marker_locations, topics):
     locations will produce garbage if the tracked objects are actually uncorrelated and only appear in the same frames
     randomly!
 
-    :param marker_locations:
-    :param topics: A list of topics to consider.
+    :param marker_locations: Dictionary mapping sensor topic to a list of marker locations (individual numpy arrays
+      or None if not found in this frame)
+    :param topics: A list of topics/sensors to consider.
     :return: filtered copy of `marker_locations`
     """
     chosen_frames = []
