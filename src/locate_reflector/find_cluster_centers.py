@@ -102,17 +102,21 @@ def get_cluster_centers_per_frame(
     cluster_centers_per_frame = []
     for i, frame in enumerate(frames):
         if create_visualization:
-            centers = get_cluster_centers(frame,
-                                          rel_intensity_threshold,
-                                          DBSCAN_epsilon,
-                                          DBSCAN_min_samples,
-                                          visualization,
-                                          i)
+            centers = get_cluster_centers(
+                frame,
+                rel_intensity_threshold,
+                DBSCAN_epsilon,
+                DBSCAN_min_samples,
+                visualization,
+                i
+            )
         else:
-            centers = get_cluster_centers(frame,
-                                          rel_intensity_threshold,
-                                          DBSCAN_epsilon,
-                                          DBSCAN_min_samples)
+            centers = get_cluster_centers(
+                frame,
+                rel_intensity_threshold,
+                DBSCAN_epsilon,
+                DBSCAN_min_samples
+            )
         cluster_centers_per_frame.append(centers)
 
     if create_visualization:
