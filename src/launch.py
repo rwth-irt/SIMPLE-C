@@ -96,7 +96,7 @@ def main():
                 centers,
                 max_distance=params["maximum neighbor distance"],
                 min_velocity=params["minimum velocity"],
-                velocity_lookahead=int(params["velocity lookahead"]),
+                window_size=int(params["window size"]),
                 max_vector_angle_rad=2 * np.pi * params["max. vector angle [deg]"] / 360,
             )
             marker_locations[topic] = selected_locations
@@ -145,7 +145,7 @@ def visualize(frames, params_initial):
             centers,
             max_distance=params["maximum neighbor distance"],
             min_velocity=params["minimum velocity"],
-            velocity_lookahead=int(params["velocity lookahead"]),
+            window_size=int(params["window size"]),
             max_vector_angle_rad=2 * np.pi * params["max. vector angle [deg]"] / 360,
         )
 

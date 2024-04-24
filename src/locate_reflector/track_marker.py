@@ -103,7 +103,7 @@ def find_marker(clusters, max_distance, min_velocity, max_vector_angle_rad) -> U
 
 
 def track_marker(
-        clusters, max_distance, min_velocity, velocity_lookahead, max_vector_angle_rad
+        clusters, max_distance, min_velocity, window_size, max_vector_angle_rad
 ) -> tuple[list[np.ndarray], list[int]]:
     """
     Applies `find_marker` successively for multiple frames.
@@ -115,15 +115,15 @@ def track_marker(
       Slices of this list will be passed to `find_marker`.
     :param max_distance: See `find_marker`.
     :param min_velocity: See `find_marker`.
-    :param velocity_lookahead: Length of the slices to pass to `find_marker`.
+    :param window_size: Length of the slices to pass to `find_marker`.
     :param max_vector_angle_rad: See `find_marker`.
     :return: (array of selected clusters, array holding indices of selected cluster per frame)
     """
-    indices = [None] * (velocity_lookahead - 1)  # can not calculate for early ones
-    centers = [None] * (velocity_lookahead - 1)
+    indices = [None] * (window_size - 1)  # can not calculate for early ones
+    centers = [None] * (window_size - 1)
 
-    for frame_i in range(len(clusters) - velocity_lookahead + 1):
-        choice = find_marker(clusters[frame_i:frame_i + velocity_lookahead],
+    for frame_i in range(len(clusters) - window_size + 1):
+        choice = find_marker(clusters[frame_i:frame_i + window_size],
                              max_distance, min_velocity, max_vector_angle_rad)
         if choice is None:
             centers.append(None)
