@@ -6,7 +6,7 @@ import sys
 import numpy as np
 
 from locate_reflector.find_cluster_centers import get_cluster_centers_per_frame
-from locate_reflector.track_marker import track_marker, positions_from_indices
+from locate_reflector.track_marker import track_marker
 from rosbag_import.rosbag_to_numpy import bag_to_numpy, write_to_numpy_file
 from rosbag_import.rosbag_utils import print_rosbag_info
 from transformation.calculate_transformation import filter_locations, calc_transformation
@@ -92,14 +92,14 @@ def main():
                 create_visualization=False,
             )
             print("  tracking marker")
-            indices = track_marker(
+            selected_locations, _ = track_marker(
                 centers,
                 max_distance=params["maximum neighbor distance"],
                 min_velocity=params["minimum velocity"],
                 velocity_lookahead=int(params["velocity lookahead"]),
                 max_vector_angle_rad=2 * np.pi * params["max. vector angle [deg]"] / 360,
             )
-            marker_locations[topic] = positions_from_indices(indices, centers)
+            marker_locations[topic] = selected_locations
         print("Searching for marker occurrences in both frames")
         filtered = filter_locations(marker_locations, trafo_topics)
         print("Calculating transformation")
@@ -141,14 +141,13 @@ def visualize(frames, params_initial):
             DBSCAN_min_samples=int(params["DBSCAN min samples"]),
             create_visualization=True
         )
-        selection_indices = track_marker(
+        marker_pos, selection_indices = track_marker(
             centers,
             max_distance=params["maximum neighbor distance"],
             min_velocity=params["minimum velocity"],
             velocity_lookahead=int(params["velocity lookahead"]),
             max_vector_angle_rad=2 * np.pi * params["max. vector angle [deg]"] / 360,
         )
-        marker_pos = positions_from_indices(selection_indices, centers)
 
         prepare_tracking_visualization(selection_indices, visualization)
         print("showing open3d visualization, this will block the settings UI")
