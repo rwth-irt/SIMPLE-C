@@ -9,7 +9,7 @@ from locate_reflector.find_cluster_centers import get_cluster_centers_per_frame
 from locate_reflector.track_marker import track_marker
 from rosbag_import.rosbag_to_numpy import bag_to_numpy, write_to_numpy_file
 from rosbag_import.rosbag_utils import print_rosbag_info
-from transformation.calculate_transformation import filter_locations, calc_transformation
+from transformation.calculate_transformation import filter_locations, calc_transformation_scipy
 from visualization.tkinter_ui import create_gui
 from visualization.tracking_visualization import prepare_tracking_visualization, visualize_tracking_animation
 from visualization.trafo_visualization import visualize_trafo
@@ -103,11 +103,13 @@ def main():
         print("Searching for marker occurrences in both frames")
         filtered = filter_locations(marker_locations, trafo_topics)
         print("Calculating transformation")
-        R, t = calc_transformation(filtered[trafo_topics[0]], filtered[trafo_topics[1]])
+        R, t, _, sensitivity = calc_transformation_scipy(filtered[trafo_topics[0]], filtered[trafo_topics[1]])
         print("Transformation result:\nR=")
         print(R)
         print("t =")
         print(t)
+        print("sensitivity matrix for rotation =")
+        print(sensitivity)
         if args.visualize_trafo:
             pts0 = data[trafo_topics[0]][0, ..., :3]  # 1st frame, only xyz
             pts1 = data[trafo_topics[1]][0, ..., :3]
