@@ -50,6 +50,9 @@ def find_marker(clusters, max_distance, min_velocity, max_vector_angle_rad) -> U
     :param max_vector_angle_rad: maximum angle in radians between two movement vectors for a cluster
     :return: None (no unique solution) or a tuple (cluster, cluster_index_in_frame)
     """
+    if len(clusters[-1]) == 0:
+        return None
+
     # calculate a trace of nearest neighbors for each cluster, backwards in time.
     traces: list[np.ndarray] = [
         get_nearest_neighbor_trace(clusters, start_i) for start_i in range(len(clusters[-1]))
