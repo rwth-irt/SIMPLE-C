@@ -33,7 +33,8 @@ def get_nearest_neighbor_trace(clusters: list[np.ndarray], start_i) -> np.ndarra
     return np.array(out)
 
 
-def find_marker(clusters, max_distance, min_velocity, max_vector_angle_rad) -> Union[None, tuple[np.ndarray, int]]:
+def find_marker(clusters, max_distance, min_velocity, max_vector_angle_rad) \
+        -> tuple[Union[None, tuple[np.ndarray, int]], str]:
     """
     Decide which cluster center in the **last** frame of `clusters` is most likely the reflector.
     The decision is **not** based on previous decisions!
@@ -48,10 +49,13 @@ def find_marker(clusters, max_distance, min_velocity, max_vector_angle_rad) -> U
     :param max_distance: maximum distance between adjacent clusters in a trace
     :param min_velocity: minimum average movement distance for clusters between two frames in a trace
     :param max_vector_angle_rad: maximum angle in radians between two movement vectors for a cluster
-    :return: None (no unique solution) or a tuple (cluster, cluster_index_in_frame)
+    :return: A tuple (result, status).
+        `result` is None (no unique solution) or a tuple (cluster, cluster_index_in_frame).
+        `status` is a string indicating whether there was a match ("UNIQUE_MATCH"), no cluster or no
+        match found ("NO_MATCH"), or multiple matches ("MULTIPLE_MATCHES").
     """
     if len(clusters[-1]) == 0:
-        return None
+        return None, "NO_MATCH"
 
     # calculate a trace of nearest neighbors for each cluster, backwards in time.
     traces: list[np.ndarray] = [
@@ -94,11 +98,13 @@ def find_marker(clusters, max_distance, min_velocity, max_vector_angle_rad) -> U
     angle_filter = np.array(list(map(check_angle, traces)))
 
     combined_filter = length_filter & distance_filter & velocity_filter & angle_filter
-    if sum(combined_filter) != 1:
+    if sum(combined_filter) == 0:
         # did not find unique solution
-        return None
+        return None, "NO_MATCH"
+    elif sum(combined_filter) > 1:
+        return None, "MULTIPLE_MATCHES"
     i = np.argmax(combined_filter)  # get index of the chosen cluster
-    return clusters[-1][i, :3], i  # only return xyz of cluster
+    return (clusters[-1][i, :3], i), "UNIQUE_MATCH"  # only return xyz of cluster
     # TODO for monitoring reasons, maybe output state:
     #  unique match, multiple matches, no matches
     # TODO do we even need the intensity mean and number of clusters in this analysis? If not, don't pass
@@ -126,7 +132,7 @@ def track_marker(
     centers = [None] * (window_size - 1)
 
     for frame_i in range(len(clusters) - window_size + 1):
-        choice = find_marker(clusters[frame_i:frame_i + window_size],
+        choice, _ = find_marker(clusters[frame_i:frame_i + window_size],
                              max_distance, min_velocity, max_vector_angle_rad)
         if choice is None:
             centers.append(None)

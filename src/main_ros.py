@@ -50,7 +50,9 @@ class OnlineCalibrator:
 
         # initialize ROS node, add publishers and subscribe to sensors
         self.trafo_pub = rospy.Publisher("transformation", Transform, queue_size=10)
-        # self.state_pub = rospy.Publisher("calibration_state", String, queue_size=10)
+        self.state_pub = rospy.Publisher("calibration_state", String, queue_size=10)
+        # TODO get topic names from config
+
         for t in topics:
             # subscribe to all sensors
             rospy.Subscriber(t, point_cloud2, lambda pc2: self.on_message(t, pc2))
@@ -67,12 +69,12 @@ class OnlineCalibrator:
             DBSCAN_epsilon=params["DBSCAN epsilon"],
             DBSCAN_min_samples=int(params["DBSCAN min samples"])
         )
-        search_result = find_marker(
+        search_result, search_state = find_marker(
             centers,
             max_distance=params["maximum neighbor distance"],
             min_velocity=params["minimum velocity"],
             max_vector_angle_rad=2 * np.pi * params["max. vector angle [deg]"] / 360,
-        )  # TODO if a "target locked" state is returned from this function, publish it somewhere
+        )
         self.frame_index[topic] += 1  # TODO somehow use timestamps
         if search_result:
             reflector_pos, index = search_result
@@ -81,6 +83,7 @@ class OnlineCalibrator:
             # a new transformation can not be calculated without new data, so only try if a new data point is added
         else:
             self.reflector_positions[topic].append(None)
+        self.state_pub.publish(String(search_state))
 
     def update_transformation(self):
         index = None
