@@ -77,7 +77,8 @@ def get_cluster_centers_per_frame(
         create_visualization=False,
 ):
     """
-    calculates cluster centers for multiple frames at once and visualization data if required.
+    Wrapper for `get_get_cluster_centers`, which is called successively for multiple frames. In addition,
+    visualization data can be returned together with the found cluster centers.
 
     :param frames: numpy array containing multiple lidar frames.
     :param rel_intensity_threshold: see `get_cluster_centers`
@@ -95,28 +96,18 @@ def get_cluster_centers_per_frame(
     point_selection = frames[..., 3] >= intensity_threshold
 
     if create_visualization:
+        # prepare visualization data
         visualization = np.copy(frames)
         visualization[:, :, 3] = -2  # any point
         visualization[point_selection, 3] = -1  # 1 for selected/bright points
 
     cluster_centers_per_frame = []
     for i, frame in enumerate(frames):
+        args = [frame, rel_intensity_threshold, DBSCAN_epsilon, DBSCAN_min_samples]
         if create_visualization:
-            centers = get_cluster_centers(
-                frame,
-                rel_intensity_threshold,
-                DBSCAN_epsilon,
-                DBSCAN_min_samples,
-                visualization,
-                i
-            )
-        else:
-            centers = get_cluster_centers(
-                frame,
-                rel_intensity_threshold,
-                DBSCAN_epsilon,
-                DBSCAN_min_samples
-            )
+            args += [visualization, i]
+
+        centers = get_cluster_centers(*args)
         cluster_centers_per_frame.append(centers)
 
     if create_visualization:
