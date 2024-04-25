@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 
 def filter_locations(marker_locations: dict[str, list[np.ndarray]], topics: list[str]):
@@ -62,6 +63,37 @@ def calc_transformation(P: np.array, Q: np.array):
 
     return R, t
 
-# TODO
-#  use scipy implementation of the Kabsch Algorithm instead, as it offers a sensitivity matrix for the transformation!
-#  https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.transform.Rotation.align_vectors.html
+
+def calc_transformation_scipy(P: np.ndarray, Q: np.ndarray, weights: np.ndarray = None):
+    """
+    Apply the Kabsch algorithm [1] using the implementation in SciPy [2].
+
+    Optionally, weights for the given points can be provided.
+
+    Calculates the optimal transformation which transforms the
+    points P to resemble Q with the least squared error.
+
+    [1] https://en.wikipedia.org/wiki/Kabsch_algorithm \n
+    [2] https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.transform.Rotation.align_vectors.html
+
+    :param P: One set of points which are transformed using the resulting transformation to then resemble Q.
+        Numpy array of shape (N, 3).
+    :param Q: The other set of points. Numpy array of shape (N, 3).
+    :param weights: Optional weights (if None, all points are weighted equally). Numpy array of shape (N).
+    :return: Tuple containing: (Rotation matrix, translation vector, Rotation quaternion, sensitivity matrix
+        of rotation).
+    """
+    assert len(P) == len(Q)
+    R, rssd, sensitivity = Rotation.align_vectors(Q, P, weights=weights, return_sensitivity=True)
+    # !!! Q, P flipped compared to own implementation!
+
+    # Returns rotation as generic scipy rotation object
+    Rq = R.as_quat()  # Quaternion
+    Rm = R.as_matrix()  # Rotation matrix
+
+    # See https://igl.ethz.ch/projects/ARAP/svd_rot.pdf on how to calculate the corresponding translation vector.
+    p_bar = np.average(P, axis=0, weights=weights)
+    q_bar = np.average(Q, axis=0, weights=weights)
+    t = q_bar - Rm @ p_bar
+
+    return Rm, t, Rq, sensitivity
