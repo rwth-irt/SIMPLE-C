@@ -2,15 +2,17 @@
 import collections
 import json
 import pathlib
+from typing import Union
 
 import numpy as np
 import rospy
+from geometry_msgs.msg import Transform, Vector3, Quaternion
 from sensor_msgs import point_cloud2
-from geometry_msgs.msg import Transform
+from std_msgs.msg import String
 
 from locate_reflector.find_cluster_centers import get_cluster_centers
 from locate_reflector.track_marker import find_marker
-from transformation.calculate_transformation import filter_locations, calc_transformation
+from transformation.calculate_transformation import filter_locations, calc_transformation_scipy
 
 
 class OnlineCalibrator:
@@ -32,7 +34,7 @@ class OnlineCalibrator:
             topics.add(a)
             topics.add(b)
 
-        self.reflector_positions: dict[str, list[np.ndarray]] = {
+        self.reflector_positions: dict[str, list[Union[None, np.ndarray]]] = {
             t: [] for t in topics
         }
         # circular buffer for frames
@@ -40,9 +42,15 @@ class OnlineCalibrator:
             t: collections.deque(maxlen=int(params["window size"]))
             for t in topics
         }
+        # counts frame indices per sensor to avoid calculating transformation with different
+        # amount of frames received per sensor
+        self.frame_index: dict[str, int] = {
+            t: 0 for t in topics
+        }
 
         # initialize ROS node, add publishers and subscribe to sensors
-        pub = rospy.Publisher("transformation", Transform, queue_size=10)
+        self.trafo_pub = rospy.Publisher("transformation", Transform, queue_size=10)
+        # self.state_pub = rospy.Publisher("calibration_state", String, queue_size=10)
         for t in topics:
             # subscribe to all sensors
             rospy.Subscriber(t, point_cloud2, lambda pc2: self.on_message(t, pc2))
@@ -65,24 +73,41 @@ class OnlineCalibrator:
             min_velocity=params["minimum velocity"],
             max_vector_angle_rad=2 * np.pi * params["max. vector angle [deg]"] / 360,
         )  # TODO if a "target locked" state is returned from this function, publish it somewhere
+        self.frame_index[topic] += 1  # TODO somehow use timestamps
         if search_result:
             reflector_pos, index = search_result
             self.reflector_positions[topic].append(reflector_pos)
-
-        # TODO
-        #  deal with timing somehow: Currently, if one detector stops to send frames, its old frames
-        #  will be used forever without throwing an error!
-        self.update_transformation()
+            self.update_transformation()
+            # a new transformation can not be calculated without new data, so only try if a new data point is added
+        else:
+            self.reflector_positions[topic].append(None)
 
     def update_transformation(self):
+        index = None
+        for i in self.frame_index.values():
+            if index is not None and i != index:
+                # wait until number of frames is the same for each sensor
+                if abs(i - index) > 1:
+                    # TODO how to deal with this error?
+                    print("One sensor seems to drop frames!")
+                return
+            index = i
+
+        del index
+
         for sensors in self.sensor_pairs:
             filtered = filter_locations(self.reflector_positions, sensors)
             if len(filtered[sensors[0]]) >= 3:
                 # trafo calculation is possible
-                R, t = calc_transformation(filtered[sensors[0]], filtered[sensors[1]])
-                # TODO
-                #  use scipy instead
-                #  publish trafo + sensitivity, but only on changes
+                a = filtered[sensors[0]]
+                b = filtered[sensors[1]]
+                R, t, Rq, sensitivity = calc_transformation_scipy(a, b)
+
+                # publish
+                self.trafo_pub.publish(Transform(
+                    translation=Vector3(x=t[0], y=t[1], z=t[2]),
+                    rotation=Quaternion(x=Rq[0], y=Rq[1], z=Rq[2], w=Rq[3])
+                ))
 
 
 if __name__ == '__main__':
