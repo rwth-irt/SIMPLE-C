@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.cluster import DBSCAN
 
 
-def get_cluster_centers(
+def get_cluster_centers_single_frame(
         frame,
         rel_intensity_threshold,
         DBSCAN_epsilon,
@@ -69,7 +69,7 @@ def get_cluster_centers(
     return np.array(centers)
 
 
-def get_cluster_centers_per_frame(
+def get_cluster_centers_multiple_frames(
         frames,
         rel_intensity_threshold,
         DBSCAN_epsilon,
@@ -107,7 +107,7 @@ def get_cluster_centers_per_frame(
         if create_visualization:
             args += [visualization, i]
 
-        centers = get_cluster_centers(*args)
+        centers = get_cluster_centers_single_frame(*args)
         cluster_centers_per_frame.append(centers)
 
     if create_visualization:

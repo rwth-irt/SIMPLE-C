@@ -5,8 +5,8 @@ import sys
 
 import numpy as np
 
-from locate_reflector.find_cluster_centers import get_cluster_centers_per_frame
-from locate_reflector.track_marker import track_marker
+from locate_reflector.find_cluster_centers import get_cluster_centers_multiple_frames
+from locate_reflector.track_marker import track_marker_multiple_frames
 from rosbag_import.rosbag_to_numpy import bag_to_numpy, write_to_numpy_file
 from rosbag_import.rosbag_utils import print_rosbag_info
 from transformation.calculate_transformation import filter_locations, calc_transformation_scipy
@@ -84,7 +84,7 @@ def main():
                 raise Exception(f"Topic '{topic}' not found in data!")
             print(f"Topic {topic}:")
             print("  calculating cluster centers")
-            centers = get_cluster_centers_per_frame(
+            centers = get_cluster_centers_multiple_frames(
                 data[topic],
                 rel_intensity_threshold=params["relative intensity threshold"],
                 DBSCAN_epsilon=params["DBSCAN epsilon"],
@@ -92,7 +92,7 @@ def main():
                 create_visualization=False,
             )
             print("  tracking marker")
-            selected_locations, _ = track_marker(
+            selected_locations, _ = track_marker_multiple_frames(
                 centers,
                 max_distance=params["maximum neighbor distance"],
                 min_velocity=params["minimum velocity"],
@@ -136,14 +136,14 @@ def visualize(frames, params_initial):
         :param _frames: frames for single sensor/topic
         :param params: parameter dict
         """
-        centers, visualization = get_cluster_centers_per_frame(
+        centers, visualization = get_cluster_centers_multiple_frames(
             _frames,
             rel_intensity_threshold=params["relative intensity threshold"],
             DBSCAN_epsilon=params["DBSCAN epsilon"],
             DBSCAN_min_samples=int(params["DBSCAN min samples"]),
             create_visualization=True
         )
-        marker_pos, selection_indices = track_marker(
+        marker_pos, selection_indices = track_marker_multiple_frames(
             centers,
             max_distance=params["maximum neighbor distance"],
             min_velocity=params["minimum velocity"],

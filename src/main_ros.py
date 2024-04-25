@@ -10,8 +10,8 @@ from geometry_msgs.msg import Transform, Vector3, Quaternion
 from sensor_msgs import point_cloud2
 from std_msgs.msg import String
 
-from locate_reflector.find_cluster_centers import get_cluster_centers
-from locate_reflector.track_marker import find_marker
+from locate_reflector.find_cluster_centers import get_cluster_centers_single_frame
+from locate_reflector.track_marker import find_marker_single_frame
 from transformation.calculate_transformation import filter_locations, calc_transformation_scipy
 
 
@@ -20,7 +20,7 @@ class OnlineCalibrator:
         """
         Create an object to manage online calibration for multiple detectors.
         Will subscribe to all relevant sensors and publish current calibration info
-        in a ROS topic as soon as it is available. TODO do that!
+        in a ROS topic as soon as it is available.
 
         :param params: Parameter dict (as obtained from parameter JSON file)
         :param sensor_pairs: list with 2-tuples of sensor topics. One sensor may appear in multiple tuples.
@@ -63,13 +63,13 @@ class OnlineCalibrator:
         # TODO: fix performance problem. See `rosbag_to_numpy.py` as well.
         self.frame_buffer[topic].append(data)
 
-        centers = get_cluster_centers(
+        centers = get_cluster_centers_single_frame(
             data,
             rel_intensity_threshold=params["relative intensity threshold"],
             DBSCAN_epsilon=params["DBSCAN epsilon"],
             DBSCAN_min_samples=int(params["DBSCAN min samples"])
         )
-        search_result, search_state = find_marker(
+        search_result, search_state = find_marker_single_frame(
             centers,
             max_distance=params["maximum neighbor distance"],
             min_velocity=params["minimum velocity"],

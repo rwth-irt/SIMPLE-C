@@ -33,7 +33,7 @@ def get_nearest_neighbor_trace(clusters: list[np.ndarray], start_i) -> np.ndarra
     return np.array(out)
 
 
-def find_marker(clusters, max_distance, min_velocity, max_vector_angle_rad) \
+def find_marker_single_frame(clusters, max_distance, min_velocity, max_vector_angle_rad) \
         -> tuple[Union[None, tuple[np.ndarray, int]], str]:
     """
     Decide which cluster center in the **last** frame of `clusters` is most likely the reflector.
@@ -105,13 +105,11 @@ def find_marker(clusters, max_distance, min_velocity, max_vector_angle_rad) \
         return None, "MULTIPLE_MATCHES"
     i = np.argmax(combined_filter)  # get index of the chosen cluster
     return (clusters[-1][i, :3], i), "UNIQUE_MATCH"  # only return xyz of cluster
-    # TODO for monitoring reasons, maybe output state:
-    #  unique match, multiple matches, no matches
     # TODO do we even need the intensity mean and number of clusters in this analysis? If not, don't pass
     #  them in here and remove all the [:3] and [..., :3] etc.!
 
 
-def track_marker(
+def track_marker_multiple_frames(
         clusters, max_distance, min_velocity, window_size, max_vector_angle_rad
 ) -> tuple[list[np.ndarray], list[int]]:
     """
@@ -132,8 +130,8 @@ def track_marker(
     centers = [None] * (window_size - 1)
 
     for frame_i in range(len(clusters) - window_size + 1):
-        choice, _ = find_marker(clusters[frame_i:frame_i + window_size],
-                             max_distance, min_velocity, max_vector_angle_rad)
+        choice, _ = find_marker_single_frame(clusters[frame_i:frame_i + window_size],
+                                             max_distance, min_velocity, max_vector_angle_rad)
         if choice is None:
             centers.append(None)
             indices.append(None)

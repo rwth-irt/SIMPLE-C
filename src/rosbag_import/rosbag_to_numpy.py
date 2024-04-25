@@ -58,10 +58,12 @@ def bag_to_numpy(rosbag_filename, topic_filter=None):
             # this is the first frame for this sensor. We did not know the number of points per frame yet and
             # use the number of this frame assuming that all frames have the same amount of points
             # -> we can now create the numpy array to hold the data
+            # TODO use known maximum point number for numpy array?
             data[topic] = np.zeros((msg_counts[topic], *msg_data.shape), dtype=np.float64)
             current_index[topic] = 0
         if len(msg_data) != data[topic].shape[1]:
             # receiving a frame which does not have the same number of points as the first one
+            # TODO delete this quickfix? -> print warning, but do not try to fix problem
             print()
             print(
                 f"          WARNING: Frame {current_index[topic]} of sensor/topic {topic} has different "
