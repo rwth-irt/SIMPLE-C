@@ -10,6 +10,7 @@ from locate_reflector.track_marker import track_marker_multiple_frames
 from rosbag_import.rosbag_to_numpy import bag_to_numpy, write_to_numpy_file
 from rosbag_import.rosbag_utils import print_rosbag_info
 from transformation.calculate_transformation import filter_locations, calc_transformation_scipy
+from transformation.calculate_transformation import filter_locations, calc_transformation_scipy, apply_transformation
 from visualization.tkinter_ui import create_gui
 from visualization.tracking_visualization import prepare_tracking_visualization, visualize_tracking_animation
 from visualization.trafo_visualization import visualize_trafo
@@ -118,11 +119,10 @@ def main():
         print("sensitivity matrix for rotation =")
         print(sensitivity)
         if args.visualize_trafo:
-            pts0 = data[trafo_topics[0]][0, ..., :3]  # 1st frame, only xyz
+            # transform point cloud from first frame for visualization
+            pts0 = data[trafo_topics[0]][0, ..., :3]
             pts1 = data[trafo_topics[1]][0, ..., :3]
-            # transform points
-            pts0tr = (R @ pts0.T).T + t
-            # show
+            pts0tr = apply_transformation(pts0, R, t)
             print("Opening open3d visualization of result...")
             visualize_trafo([pts0tr, pts1])
 

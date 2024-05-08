@@ -2,6 +2,8 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 
+# TODO delete transformation subpackage and rename this file
+
 def filter_locations(marker_locations: dict[str, list[np.ndarray]], topics: list[str]):
     """
     Returns a filtered copy of `marker_locations` which only contains the points from frames where a location is
@@ -97,3 +99,15 @@ def calc_transformation_scipy(P: np.ndarray, Q: np.ndarray, weights: np.ndarray 
     t = q_bar - Rm @ p_bar
 
     return Rm, t, Rq, sensitivity
+
+
+def apply_transformation(points, R, t):
+    """
+    Apply the transformation on multiple points.
+
+    :param points: a numpy array containing multiple 3d points to transform
+    :param R: the rotation matrix
+    :param t: the translation vector
+    :return: `points`, transformed
+    """
+    return (R @ points.T).T + t
