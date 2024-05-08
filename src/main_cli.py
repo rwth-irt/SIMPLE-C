@@ -50,6 +50,7 @@ def main():
         params = json.load(f)
 
     # load data from file
+    print(f"Processing rosbag file {pathlib.Path(args.rosbag).name}")
     data = None
     cache_filename = args.rosbag + "_cache.npz"
     if not args.no_read_cache:
@@ -70,7 +71,7 @@ def main():
 
     if args.visualize_tracking:
         # visualize reflector tracking for given topic name
-        visualize(data[args.visualize_tracking], params)
+        visualize_tracking(data[args.visualize_tracking], params)
 
     if args.transformation:
         # calculate transformation
@@ -102,7 +103,7 @@ def main():
             marker_locations[topic] = selected_locations
         print("Searching for marker occurrences in both frames")
         filtered = filter_locations(marker_locations, trafo_topics)
-        print("Calculating transformation")
+        print(f"Calculating transformation using {len(filtered[trafo_topics[0]])} points")
         R, t, _, sensitivity = calc_transformation_scipy(filtered[trafo_topics[0]], filtered[trafo_topics[1]])
         print("Transformation result:\nR=")
         print(R)
@@ -120,16 +121,18 @@ def main():
             visualize_trafo([pts0tr, pts1])
 
 
-def visualize(frames, params_initial):
+def visualize_tracking(frames, params_initial):
     """
     For a frames array of **a single sensor**, a tkinter param selection will be shown,
-    from which the open3d visualization can be started.
+    from which the open3d tracking visualization can be started.
+
+    Will call all clustering/tracking functions independently of the --transformation CLI argument.
 
     :param frames: sensor data to use
     :param params_initial: initial parameters to be loaded to UI
     """
 
-    def visualize_with_params(_frames, params):
+    def visualize_tracking_with_params(_frames, params):
         """
         gets **frames for single sensor** and params, calls track_marker and opens open3d visualization.
         Is called as callback from tkinter UI once the "calculate" button is pressed.
@@ -159,7 +162,7 @@ def visualize(frames, params_initial):
 
     create_gui(
         params_initial,
-        callback=lambda params_from_gui: visualize_with_params(frames, params_from_gui),
+        callback=lambda params_from_gui: visualize_tracking_with_params(frames, params_from_gui),
     )
 
 
