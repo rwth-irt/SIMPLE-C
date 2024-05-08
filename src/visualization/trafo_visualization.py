@@ -2,9 +2,9 @@ import numpy as np
 import open3d as o3d
 
 colors = [
-    np.array([1.0, 0.0, 0.0]),  # RED
-    np.array([0.0, 1.0, 0.0]),  # GREEN
-    np.array([0.0, 0.0, 1.0]),  # BLUE
+    np.array([240, 185, 64]) / 255,  # RED
+    np.array([51, 105, 159]) / 255,  # GREEN
+    np.array([4, 114, 77]) / 255,  # BLUE
 ]
 
 
