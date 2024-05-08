@@ -9,8 +9,8 @@ from locate_reflector.find_cluster_centers import get_cluster_centers_multiple_f
 from locate_reflector.track_marker import track_marker_multiple_frames
 from rosbag_import.rosbag_to_numpy import bag_to_numpy, write_to_numpy_file
 from rosbag_import.rosbag_utils import print_rosbag_info
-from transformation.calculate_transformation import filter_locations, calc_transformation_scipy
 from transformation.calculate_transformation import filter_locations, calc_transformation_scipy, apply_transformation
+from visualization.correlation_plot import plot_match_distances
 from visualization.tkinter_ui import create_gui
 from visualization.tracking_visualization import prepare_tracking_visualization, visualize_tracking_animation
 from visualization.trafo_visualization import visualize_trafo
@@ -118,6 +118,19 @@ def main():
         print(t)
         print("sensitivity matrix for rotation =")
         print(sensitivity)
+
+        # TODO add CLI flag
+        # show verification plot with distances between matched points
+
+        plot_match_distances(
+            apply_transformation(filtered[trafo_topics[0]], R, t),
+            filtered[trafo_topics[1]]
+        )
+        visualize_trafo([
+            apply_transformation(filtered[trafo_topics[0]], R, t),
+            filtered[trafo_topics[1]]
+        ])
+
         if args.visualize_trafo:
             # transform point cloud from first frame for visualization
             pts0 = data[trafo_topics[0]][0, ..., :3]
