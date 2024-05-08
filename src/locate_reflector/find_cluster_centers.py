@@ -25,7 +25,8 @@ def get_cluster_centers_single_frame(
     A numpy array is then returned which consists of those values per point.
 
     If `visualization` is passed, this function writes cluster centers in it's intensity channel!
-    For an explanation of the visualization array, see documentation in `tracking_visualization.py`.
+    For an explanation of the visualization array, see documentation in
+    :source:`src/visualization/tracking_visualization.py`.
 
     :param frame: lidar frame as numpy array: [ x y z intensity ] per point
     :param rel_intensity_threshold: value between 0 and 1 to determine the ratio of points considered "bright".
@@ -77,13 +78,13 @@ def get_cluster_centers_multiple_frames(
         create_visualization=False,
 ):
     """
-    Wrapper for `get_get_cluster_centers`, which is called successively for multiple frames. In addition,
+    Wrapper for :func:`get_cluster_centers_single_frame`, which is called successively for multiple frames. In addition,
     visualization data can be returned together with the found cluster centers.
 
     :param frames: numpy array containing multiple lidar frames.
-    :param rel_intensity_threshold: see `get_cluster_centers`
-    :param DBSCAN_epsilon: see `get_cluster_centers`
-    :param DBSCAN_min_samples: see `get_cluster_centers`
+    :param rel_intensity_threshold: see :func:`get_cluster_centers_single_frame`
+    :param DBSCAN_epsilon: see :func:`get_cluster_centers_single_frame`
+    :param DBSCAN_min_samples: see :func:`get_cluster_centers_single_frame`
     :param create_visualization: whether to return a visualization array for open3d result visualization.
     :return: List with (possibly empty, meaning no clusters) numpy array
         containing mean values of points in respective cluster:
