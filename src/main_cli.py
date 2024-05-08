@@ -44,7 +44,8 @@ def main():
     paramfile = pathlib.Path(__file__).parent.parent.absolute() / "default_params.json"
     if args.param_file:
         if not pathlib.Path(args.param_file).is_file():
-            raise Exception("Could not find given parameter file! Omit option to use defaults.")
+            print("Could not find given parameter file! Omit option to use defaults. Aborting.")
+            sys.exit(1)
         paramfile = args.param_file
     with open(paramfile, "r") as f:
         params = json.load(f)
@@ -64,7 +65,8 @@ def main():
     if data is None:
         # did not read from cache or no cache found
         if not pathlib.Path(args.rosbag).is_file():
-            raise Exception("Given rosbag file does not exist")
+            print("Given rosbag file does not exist, aborting.")
+            sys.exit(1)
         data = bag_to_numpy(args.rosbag)
         if not args.no_write_cache:
             write_to_numpy_file(cache_filename, data)
@@ -77,12 +79,16 @@ def main():
         # calculate transformation
         trafo_topics = args.transformation.split(",")
         if len(trafo_topics) != 2:
-            raise Exception(f"Must specify exactly two topics for transformation calculation")
+            print("Must specify exactly two topics for transformation calculation. Aborting.")
+            sys.exit(1)
 
         marker_locations = {}
         for topic in trafo_topics:
             if topic not in data:
-                raise Exception(f"Topic '{topic}' not found in data!")
+                print(f"Topic '{topic}' not found in data!")
+                print_rosbag_info(args.rosbag)
+                print("Aborting due to invalid topic names.")
+                sys.exit(1)
             print(f"Topic {topic}:")
             print("  calculating cluster centers")
             centers = get_cluster_centers_multiple_frames(
