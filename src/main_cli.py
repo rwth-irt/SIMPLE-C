@@ -129,7 +129,7 @@ def main():
         visualize_trafo([
             apply_transformation(filtered[trafo_topics[0]], R, t),
             filtered[trafo_topics[1]]
-        ])
+        ], draw_point_match_markers=True)
 
         if args.visualize_trafo:
             # transform point cloud from first frame for visualization
