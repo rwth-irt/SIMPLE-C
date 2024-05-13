@@ -33,7 +33,12 @@ def main():
                              "Example: --transformation 'topic1,topic2' "
                              "The resulting transformation transforms topic1 to the coordinates of topic2.")
     parser.add_argument("--visualize-trafo", action="store_true",
-                        help="Show open3d visualization of points with applied transformation")
+                        help="Show open3d visualization of points with applied transformation."
+                             "(Only applies if --transformation is used.)")
+    parser.add_argument("--visualize-alignment", action="store_true",
+                        help="Show the transformed reflector points in open3d and a plot of the distance between"
+                             "corresponding points to verify correct alignment."
+                             "(Only applies if --transformation is used.)")
 
     args = parser.parse_args()
 
@@ -108,10 +113,13 @@ def main():
                 max_vector_angle_rad=2 * np.pi * params["max. vector angle [deg]"] / 360,
             )
             marker_locations[topic] = selected_locations
+
         print("Searching for marker occurrences in both frames")
         filtered = filter_locations(marker_locations, trafo_topics)
+
         print(f"Calculating transformation using {len(filtered[trafo_topics[0]])} points")
         R, t, _, sensitivity = calc_transformation_scipy(filtered[trafo_topics[0]], filtered[trafo_topics[1]])
+
         print("Transformation result:\nR=")
         print(R)
         print("t =")
@@ -119,17 +127,16 @@ def main():
         print("sensitivity matrix for rotation =")
         print(sensitivity)
 
-        # TODO add CLI flag
-        # show verification plot with distances between matched points
-
-        plot_match_distances(
-            apply_transformation(filtered[trafo_topics[0]], R, t),
-            filtered[trafo_topics[1]]
-        )
-        visualize_trafo([
-            apply_transformation(filtered[trafo_topics[0]], R, t),
-            filtered[trafo_topics[1]]
-        ], draw_point_match_markers=True)
+        if args.visualize_alignment:
+            # show verification plot with distances between matched points
+            plot_match_distances(
+                apply_transformation(filtered[trafo_topics[0]], R, t),
+                filtered[trafo_topics[1]]
+            )
+            visualize_trafo([
+                apply_transformation(filtered[trafo_topics[0]], R, t),
+                filtered[trafo_topics[1]]
+            ], draw_point_match_markers=True)
 
         if args.visualize_trafo:
             # transform point cloud from first frame for visualization
