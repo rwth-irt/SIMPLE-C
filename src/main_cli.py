@@ -40,8 +40,6 @@ def main():
                              "corresponding points to verify correct alignment."
                              "(Only applies if --transformation is used.)")
                         help="Show open3d visualization of points with applied transformation")
-    parser.add_argument("--metric", type=str, choices=['euclidean', 'Mahalanobis'],
-                    help="Specify the distance metric: 'euclidean' or 'Mahalanobis'")
 
 
     args = parser.parse_args()
@@ -107,7 +105,7 @@ def main():
                 DBSCAN_epsilon=params["DBSCAN epsilon"],
                 DBSCAN_min_samples=int(params["DBSCAN min samples"]),
                 create_visualization=False,
-                metric=args.metric
+                metric=params["metric"]
             )
             print("  tracking marker")
             selected_locations, _ = track_marker_multiple_frames(
@@ -175,7 +173,8 @@ def visualize_tracking(frames, params_initial):
             rel_intensity_threshold=params["relative intensity threshold"],
             DBSCAN_epsilon=params["DBSCAN epsilon"],
             DBSCAN_min_samples=int(params["DBSCAN min samples"]),
-            create_visualization=True
+            create_visualization=True,
+            metric=params["metric"]
         )
         marker_pos, selection_indices = track_marker_multiple_frames(
             centers,

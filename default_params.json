@@ -5,5 +5,6 @@
   "maximum neighbor distance": 0.4,
   "minimum velocity": 0.05,
   "window size": 8,
-  "max. vector angle [deg]": 80
+  "max. vector angle [deg]": 80,
+  "metric": 1
 }
