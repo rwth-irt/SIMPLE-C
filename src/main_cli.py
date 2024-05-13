@@ -1,10 +1,10 @@
 import argparse
-import json
 import pathlib
 import sys
 
 import numpy as np
 
+import parameters
 from locate_reflector.find_cluster_centers import get_cluster_centers_multiple_frames
 from locate_reflector.track_marker import track_marker_multiple_frames
 from rosbag_import.rosbag_to_numpy import bag_to_numpy, write_to_numpy_file
@@ -47,14 +47,14 @@ def main():
         sys.exit()
 
     # load parameters (first because loading data might take long)
-    paramfile = pathlib.Path(__file__).parent.parent.absolute() / "default_params.json"
     if args.param_file:
         if not pathlib.Path(args.param_file).is_file():
             print("Could not find given parameter file! Omit option to use defaults. Aborting.")
             sys.exit(1)
         paramfile = args.param_file
-    with open(paramfile, "r") as f:
-        params = json.load(f)
+    else:
+        paramfile = None  # use default
+    parameters.init(paramfile)
 
     # load data from file
     print(f"Processing rosbag file {pathlib.Path(args.rosbag).name}")
@@ -79,7 +79,7 @@ def main():
 
     if args.visualize_tracking:
         # visualize reflector tracking for given topic name
-        visualize_tracking(data[args.visualize_tracking], params)
+        visualize_tracking(data[args.visualize_tracking], parameters.params)
 
     if args.transformation:
         # calculate transformation
@@ -99,18 +99,18 @@ def main():
             print("  calculating cluster centers")
             centers = get_cluster_centers_multiple_frames(
                 data[topic],
-                rel_intensity_threshold=params["relative intensity threshold"],
-                DBSCAN_epsilon=params["DBSCAN epsilon"],
-                DBSCAN_min_samples=int(params["DBSCAN min samples"]),
+                rel_intensity_threshold=parameters.params["relative intensity threshold"],
+                DBSCAN_epsilon=parameters.params["DBSCAN epsilon"],
+                DBSCAN_min_samples=int(parameters.params["DBSCAN min samples"]),
                 create_visualization=False,
             )
             print("  tracking marker")
             selected_locations, _ = track_marker_multiple_frames(
                 centers,
-                max_distance=params["maximum neighbor distance"],
-                min_velocity=params["minimum velocity"],
-                window_size=int(params["window size"]),
-                max_vector_angle_rad=2 * np.pi * params["max. vector angle [deg]"] / 360,
+                max_distance=parameters.params["maximum neighbor distance"],
+                min_velocity=parameters.params["minimum velocity"],
+                window_size=int(parameters.params["window size"]),
+                max_vector_angle_rad=2 * np.pi * parameters.params["max. vector angle [deg]"] / 360,
             )
             marker_locations[topic] = selected_locations
 
