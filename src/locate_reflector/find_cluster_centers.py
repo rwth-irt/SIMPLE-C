@@ -1,5 +1,27 @@
 import numpy as np
 from sklearn.cluster import DBSCAN
+from scipy.spatial.distance import mahalanobis
+
+
+def mahalanobis_distance_metric(X):
+    """
+    Calculates the Mahablonis distance matrix of a given matrix dataset X
+    https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.mahalanobis.html
+
+    :param X: Data matrix, for example n x 4 with n points each described by x, y, z, intensity
+    :return mahalanobis_dist: Distance matrix with n x n describing the distance/similarity between each point of X
+    """
+
+    covariance = np.cov(X, rowvar=False)
+    covariance_inverse = np.linalg.inv(covariance)
+
+    # Compute the Mahalanobis distance matrix
+    mahalanobis_dist = np.zeros((len(X), len(X)))
+    for i in range(len(X)):
+        for j in range(len(X)):
+            mahalanobis_dist[i, j] = mahalanobis(X[i], X[j], covariance_inverse)
+    
+    return mahalanobis_dist
 
 
 def get_cluster_centers_single_frame(
@@ -7,6 +29,7 @@ def get_cluster_centers_single_frame(
         rel_intensity_threshold,
         DBSCAN_epsilon,
         DBSCAN_min_samples,
+        metric="euclidean",
         # visualization-only parameters
         visualization=None,
         i=None,
@@ -44,11 +67,24 @@ def get_cluster_centers_single_frame(
     if len(bright) == 0:
         # no bright points in this frame
         return np.array([])  # empty array: no centers
+    
+    # Normalize the data by radial distance
+    radial_distances = np.sqrt(np.sum(bright[:, :3] ** 2, axis=1))
+    normalized_points = bright[:, :3] / np.expand_dims(radial_distances, axis=1)
+    normalized_data = np.concatenate((normalized_points, np.expand_dims(bright[:, 3]/255.0, axis=1)), axis=1)
 
-    # perform DBSCAN
-    clusterlabels = DBSCAN(
-        eps=DBSCAN_epsilon, min_samples=DBSCAN_min_samples
-    ).fit_predict(bright[:, :3])  # only based on xyz
+    if metric == "Mahalanobis":
+        mahalanobis_points = mahalanobis_distance_metric(normalized_data)
+
+        # perform DBSCAN
+        clusterlabels = DBSCAN(
+            eps=DBSCAN_epsilon, metric="precomputed", min_samples=DBSCAN_min_samples
+        ).fit_predict(mahalanobis_points)  # based on normalized x, y, z, i
+    else: # euclidean based clustering
+        # perform DBSCAN
+        clusterlabels = DBSCAN(
+            eps=DBSCAN_epsilon, min_samples=DBSCAN_min_samples
+        ).fit_predict(normalized_data[:, :3])  # only based on xyz
 
     # get centroids of clusters
     centers = []
@@ -76,6 +112,7 @@ def get_cluster_centers_multiple_frames(
         DBSCAN_epsilon,
         DBSCAN_min_samples,
         create_visualization=False,
+        metric="euclidean"
 ):
     """
     Wrapper for :func:`get_cluster_centers_single_frame`, which is called successively for multiple frames. In addition,
@@ -104,7 +141,7 @@ def get_cluster_centers_multiple_frames(
 
     cluster_centers_per_frame = []
     for i, frame in enumerate(frames):
-        args = [frame, rel_intensity_threshold, DBSCAN_epsilon, DBSCAN_min_samples]
+        args = [frame, rel_intensity_threshold, DBSCAN_epsilon, DBSCAN_min_samples, metric]
         if create_visualization:
             args += [visualization, i]
 
