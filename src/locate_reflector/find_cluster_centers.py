@@ -29,7 +29,7 @@ def get_cluster_centers_single_frame(
         rel_intensity_threshold,
         DBSCAN_epsilon,
         DBSCAN_min_samples,
-        metric="euclidean",
+        metric=0,
         # visualization-only parameters
         visualization=None,
         i=None,
@@ -66,14 +66,9 @@ def get_cluster_centers_single_frame(
     if len(bright) == 0:
         # no bright points in this frame
         return np.array([])  # empty array: no centers
-    
-    # Normalize the data by radial distance
-    radial_distances = np.sqrt(np.sum(bright[:, :3] ** 2, axis=1))
-    normalized_points = bright[:, :3] / np.expand_dims(radial_distances, axis=1)
-    normalized_data = np.concatenate((normalized_points, np.expand_dims(bright[:, 3]/255.0, axis=1)), axis=1)
 
-    if metric == "Mahalanobis":
-        mahalanobis_points = mahalanobis_distance_metric(normalized_data)
+    if metric == 1:
+        mahalanobis_points = mahalanobis_distance_metric(bright)
 
         # perform DBSCAN
         clusterlabels = DBSCAN(
@@ -83,7 +78,7 @@ def get_cluster_centers_single_frame(
         # perform DBSCAN
         clusterlabels = DBSCAN(
             eps=DBSCAN_epsilon, min_samples=DBSCAN_min_samples
-        ).fit_predict(normalized_data[:, :3])  # only based on xyz
+        ).fit_predict(bright[:, :3])  # only based on xyz
 
     # get centroids of clusters
     centers = []

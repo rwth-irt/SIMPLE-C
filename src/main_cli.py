@@ -33,8 +33,6 @@ def main():
                              "The resulting transformation transforms topic1 to the coordinates of topic2.")
     parser.add_argument("--visualize-trafo", action="store_true",
                         help="Show open3d visualization of points with applied transformation")
-    parser.add_argument("--metric", type=str, choices=['euclidean', 'Mahalanobis'],
-                    help="Specify the distance metric: 'euclidean' or 'Mahalanobis'")
 
 
     args = parser.parse_args()
@@ -93,7 +91,7 @@ def main():
                 DBSCAN_epsilon=params["DBSCAN epsilon"],
                 DBSCAN_min_samples=int(params["DBSCAN min samples"]),
                 create_visualization=False,
-                metric=args.metric
+                metric=params["metric"]
             )
             print("  tracking marker")
             selected_locations, _ = track_marker_multiple_frames(
@@ -107,13 +105,12 @@ def main():
         print("Searching for marker occurrences in both frames")
         filtered = filter_locations(marker_locations, trafo_topics)
         print("Calculating transformation")
-        R, t, _, sensitivity = calc_transformation(filtered[trafo_topics[0]], filtered[trafo_topics[1]])
+        R, t = calc_transformation(filtered[trafo_topics[0]], filtered[trafo_topics[1]])
         print("Transformation result:\nR=")
         print(R)
         print("t =")
         print(t)
         print("sensitivity matrix for rotation =")
-        print(sensitivity)
         if args.visualize_trafo:
             pts0 = data[trafo_topics[0]][0, ..., :3]  # 1st frame, only xyz
             pts1 = data[trafo_topics[1]][0, ..., :3]
@@ -145,7 +142,8 @@ def visualize(frames, params_initial):
             rel_intensity_threshold=params["relative intensity threshold"],
             DBSCAN_epsilon=params["DBSCAN epsilon"],
             DBSCAN_min_samples=int(params["DBSCAN min samples"]),
-            create_visualization=True
+            create_visualization=True,
+            metric=params["metric"]
         )
         marker_pos, selection_indices = track_marker_multiple_frames(
             centers,
