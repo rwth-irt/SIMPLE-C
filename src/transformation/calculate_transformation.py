@@ -68,15 +68,15 @@ def calc_transformation(P: np.array, Q: np.array):
 
 def calc_transformation_scipy(P: np.ndarray, Q: np.ndarray, weights: np.ndarray = None):
     """
-    Apply the Kabsch algorithm [1] using the implementation in SciPy [2].
+    Apply the Kabsch algorithm [1]_ using the implementation in SciPy [2]_.
 
     Optionally, weights for the given points can be provided.
 
-    Calculates the optimal transformation which transforms the
+    Calculates the optimal transformation (translation and rotation) which transforms the
     points P to resemble Q with the least squared error.
 
-    [1] https://en.wikipedia.org/wiki/Kabsch_algorithm \n
-    [2] https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.transform.Rotation.align_vectors.html
+    .. [1] https://en.wikipedia.org/wiki/Kabsch_algorithm \n
+    .. [2] https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.transform.Rotation.align_vectors.html
 
     :param P: One set of points which are transformed using the resulting transformation to then resemble Q.
         Numpy array of shape (N, 3).
@@ -86,16 +86,20 @@ def calc_transformation_scipy(P: np.ndarray, Q: np.ndarray, weights: np.ndarray 
         of rotation).
     """
     assert len(P) == len(Q)
-    R, rssd, sensitivity = Rotation.align_vectors(Q, P, weights=weights, return_sensitivity=True)
     # !!! Q, P flipped compared to own implementation!
+
+    # calculate weighted mean of each set of points
+    p_bar = np.average(P, axis=0, weights=weights)
+    q_bar = np.average(Q, axis=0, weights=weights)
+
+    # Scipy expects points to be centered, substract the data point's centroids.
+    R, rssd, sensitivity = Rotation.align_vectors(Q - q_bar, P - p_bar, weights=weights, return_sensitivity=True)
 
     # Returns rotation as generic scipy rotation object
     Rq = R.as_quat()  # Quaternion
     Rm = R.as_matrix()  # Rotation matrix
 
     # See https://igl.ethz.ch/projects/ARAP/svd_rot.pdf on how to calculate the corresponding translation vector.
-    p_bar = np.average(P, axis=0, weights=weights)
-    q_bar = np.average(Q, axis=0, weights=weights)
     t = q_bar - Rm @ p_bar
 
     return Rm, t, Rq, sensitivity
