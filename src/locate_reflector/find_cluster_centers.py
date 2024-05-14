@@ -1,7 +1,30 @@
 import numpy as np
 from sklearn.cluster import DBSCAN
 from scipy.spatial.distance import mahalanobis
+from sklearn.metrics.pairwise import rbf_kernel, euclidean_distances, cosine_similarity
 
+
+def weighted_distances(points, distance_scale_factor):
+    num_points = len(points)
+    distances = np.zeros((num_points, num_points))
+    radial_distances = np.sqrt(np.sum(points[:, :3] ** 2, axis=1))
+    
+    for i in range(num_points):
+        for j in range(num_points):
+            if i != j:
+                euclidean_distance = np.linalg.norm(points[i] - points[j])
+                weighted_distance = euclidean_distance * 1/np.sqrt(radial_distances[i]) * distance_scale_factor
+                distances[i, j] = weighted_distance
+                
+    return distances
+
+def normalize(data):
+    data_norm = data.copy()
+    for i in range(data.shape[1]):
+        min_val = np.min(data[:, i])
+        max_val = np.max(data[:, i])
+        data_norm[:, i] = (data[:, i] - min_val) / (max_val - min_val)
+    return data_norm
 
 def mahalanobis_distance_metric(X):
     """
@@ -68,8 +91,9 @@ def get_cluster_centers_single_frame(
         # no bright points in this frame
         return np.array([])  # empty array: no centers
 
-    if metric == 1:
-        mahalanobis_points = mahalanobis_distance_metric(bright)
+    if metric == 1: 
+        normalized_data = normalize(bright)
+        mahalanobis_points = mahalanobis_distance_metric(normalized_data)
 
         # perform DBSCAN
         clusterlabels = DBSCAN(
