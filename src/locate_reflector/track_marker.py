@@ -82,7 +82,7 @@ def find_marker_single_frame(clusters, max_distance, min_velocity, max_vector_an
     )))
 
     # Drop all traces where the angle between two update vectors (deltas) is too big.
-    # (The reflector is expected to move at a consistent speed.)
+    # (The reflector is expected to move at a consistent direction.)
     def check_angle(trace: np.ndarray):
         deltas = np.diff(trace[..., :3], axis=0)
         a = deltas[1:]

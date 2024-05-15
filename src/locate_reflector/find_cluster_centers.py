@@ -80,6 +80,7 @@ def get_cluster_centers_single_frame(
     :param DBSCAN_min_samples: min_samples parameter for DBSCAN
     :param visualization: optional visualization array to write cluster indices to.
     :param i: Required only if visualization is given, this specifies the frame index to write to.
+    :param metric: Specifies the metric used to perform DBSCAN clusterin. Either 0 (euclidean) or 1 (mahalanobis)
     :return: numpy array with one column per cluster containing [ x y z intensity #points ] (mean values!). If
       no clusters are found, an empty numpy array is returned.
     """
@@ -130,7 +131,7 @@ def get_cluster_centers_multiple_frames(
         DBSCAN_epsilon,
         DBSCAN_min_samples,
         create_visualization=False,
-        metric="euclidean"
+        metric=0
 ):
     """
     Wrapper for `get_get_cluster_centers`, which is called successively for multiple frames. In addition,
@@ -141,6 +142,7 @@ def get_cluster_centers_multiple_frames(
     :param DBSCAN_epsilon: see `get_cluster_centers`
     :param DBSCAN_min_samples: see `get_cluster_centers`
     :param create_visualization: whether to return a visualization array for open3d result visualization.
+    :param metric: Specifies the metric used to perform DBSCAN clusterin. Either 0 (euclidean) or 1 (mahalanobis)
     :return: List with (possibly empty, meaning no clusters) numpy array
         containing mean values of points in respective cluster:
         (x_mean, y_mean, z_mean, intensity_mean, number_of_points).
