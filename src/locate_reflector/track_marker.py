@@ -18,6 +18,12 @@ def get_nearest_neighbor_trace(clusters: list[np.ndarray], start_i) -> np.ndarra
     Get the trace of nearest neighbors, going **backwards** from the "start cluster" `clusters[-1][start_i]`.
     The start cluster is contained in the returned trace.
     If a frame contains no clusters, the search is cancelled and the trace up to this point is returned.
+
+    :param clusters: A list of numpy arrays. Each of those arrays contains the cluster means/centers of a single frame.
+        The number of those centers may vary in different frames.
+    :param start_i: The index of the cluster **in the last frame** to start searching the trace from.
+    :return: A numpy array containing the trace, i.e. one center per frame. If no trace is found, it will only
+        contain the center referenced by `start_i`. If `clusters` is empty, an empty array is returned.
     """
     if len(clusters) == 0:
         return np.array([])
@@ -113,18 +119,18 @@ def track_marker_multiple_frames(
         clusters, max_distance, min_velocity, window_size, max_vector_angle_rad
 ) -> tuple[list[np.ndarray], list[int]]:
     """
-    Applies `find_marker` successively for multiple frames.
+    Applies :func:`find_marker_single_frame` successively for multiple frames.
     Therefore, tracks the reflector in the data of a single sensor.
-    Passes slices of size `window_size` to `find_marker`.
+    Passes slices of size `window_size` to :func:`find_marker_single_frame`.
     Returns array of selected cluster centers and array of indices.
 
     :param clusters: list with a numpy array per frame, containing all found cluster centers in this frame.
-      Slices of this list will be passed to `find_marker`.
-    :param max_distance: See `find_marker`.
-    :param min_velocity: See `find_marker`.
-    :param window_size: Length of the slices to pass to `find_marker`.
-    :param max_vector_angle_rad: See `find_marker`.
-    :return: (array of selected clusters, array holding indices of selected cluster per frame)
+      Slices of this list will be passed to :func:`find_marker_single_frame`.
+    :param max_distance: See :func:`find_marker_single_frame`.
+    :param min_velocity: See :func:`find_marker_single_frame`.
+    :param window_size: Length of the slices to pass to :func:`find_marker_single_frame`.
+    :param max_vector_angle_rad: See :func:`find_marker_single_frame`.
+    :return: Tuple (array of selected clusters, array holding indices of selected cluster per frame)
     """
     indices = [None] * (window_size - 1)  # can not calculate for early ones
     centers = [None] * (window_size - 1)

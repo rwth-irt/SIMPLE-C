@@ -9,7 +9,8 @@ from locate_reflector.find_cluster_centers import get_cluster_centers_multiple_f
 from locate_reflector.track_marker import track_marker_multiple_frames
 from rosbag_import.rosbag_to_numpy import bag_to_numpy, write_to_numpy_file
 from rosbag_import.rosbag_utils import print_rosbag_info
-from transformation.calculate_transformation import filter_locations, calc_transformation_scipy
+from transformation import filter_locations, calc_transformation_scipy, apply_transformation
+from visualization.correlation_plot import plot_match_distances
 from visualization.tkinter_ui import create_gui
 from visualization.tracking_visualization import prepare_tracking_visualization, visualize_tracking_animation
 from visualization.trafo_visualization import visualize_trafo
@@ -32,7 +33,12 @@ def main():
                              "Example: --transformation 'topic1,topic2' "
                              "The resulting transformation transforms topic1 to the coordinates of topic2.")
     parser.add_argument("--visualize-trafo", action="store_true",
-                        help="Show open3d visualization of points with applied transformation")
+                        help="Show open3d visualization of points with applied transformation."
+                             "(Only applies if --transformation is used.)")
+    parser.add_argument("--visualize-alignment", action="store_true",
+                        help="Show the transformed reflector points in open3d and a plot of the distance between"
+                             "corresponding points to verify correct alignment."
+                             "(Only applies if --transformation is used.)")
 
     args = parser.parse_args()
 
@@ -44,12 +50,14 @@ def main():
     paramfile = pathlib.Path(__file__).parent.parent.absolute() / "default_params.json"
     if args.param_file:
         if not pathlib.Path(args.param_file).is_file():
-            raise Exception("Could not find given parameter file! Omit option to use defaults.")
+            print("Could not find given parameter file! Omit option to use defaults. Aborting.")
+            sys.exit(1)
         paramfile = args.param_file
     with open(paramfile, "r") as f:
         params = json.load(f)
 
     # load data from file
+    print(f"Processing rosbag file {pathlib.Path(args.rosbag).name}")
     data = None
     cache_filename = args.rosbag + "_cache.npz"
     if not args.no_read_cache:
@@ -63,25 +71,30 @@ def main():
     if data is None:
         # did not read from cache or no cache found
         if not pathlib.Path(args.rosbag).is_file():
-            raise Exception("Given rosbag file does not exist")
+            print("Given rosbag file does not exist, aborting.")
+            sys.exit(1)
         data = bag_to_numpy(args.rosbag)
         if not args.no_write_cache:
             write_to_numpy_file(cache_filename, data)
 
     if args.visualize_tracking:
         # visualize reflector tracking for given topic name
-        visualize(data[args.visualize_tracking], params)
+        visualize_tracking(data[args.visualize_tracking], params)
 
     if args.transformation:
         # calculate transformation
         trafo_topics = args.transformation.split(",")
         if len(trafo_topics) != 2:
-            raise Exception(f"Must specify exactly two topics for transformation calculation")
+            print("Must specify exactly two topics for transformation calculation. Aborting.")
+            sys.exit(1)
 
         marker_locations = {}
         for topic in trafo_topics:
             if topic not in data:
-                raise Exception(f"Topic '{topic}' not found in data!")
+                print(f"Topic '{topic}' not found in data!")
+                print_rosbag_info(args.rosbag)
+                print("Aborting due to invalid topic names.")
+                sys.exit(1)
             print(f"Topic {topic}:")
             print("  calculating cluster centers")
             centers = get_cluster_centers_multiple_frames(
@@ -100,36 +113,52 @@ def main():
                 max_vector_angle_rad=2 * np.pi * params["max. vector angle [deg]"] / 360,
             )
             marker_locations[topic] = selected_locations
+
         print("Searching for marker occurrences in both frames")
         filtered = filter_locations(marker_locations, trafo_topics)
-        print("Calculating transformation")
+
+        print(f"Calculating transformation using {len(filtered[trafo_topics[0]])} points")
         R, t, _, sensitivity = calc_transformation_scipy(filtered[trafo_topics[0]], filtered[trafo_topics[1]])
+
         print("Transformation result:\nR=")
         print(R)
         print("t =")
         print(t)
         print("sensitivity matrix for rotation =")
         print(sensitivity)
+
+        if args.visualize_alignment:
+            # show verification plot with distances between matched points
+            plot_match_distances(
+                apply_transformation(filtered[trafo_topics[0]], R, t),
+                filtered[trafo_topics[1]]
+            )
+            visualize_trafo([
+                apply_transformation(filtered[trafo_topics[0]], R, t),
+                filtered[trafo_topics[1]]
+            ], draw_point_match_markers=True)
+
         if args.visualize_trafo:
-            pts0 = data[trafo_topics[0]][0, ..., :3]  # 1st frame, only xyz
+            # transform point cloud from first frame for visualization
+            pts0 = data[trafo_topics[0]][0, ..., :3]
             pts1 = data[trafo_topics[1]][0, ..., :3]
-            # transform points
-            pts0tr = (R @ pts0.T).T + t
-            # show
+            pts0tr = apply_transformation(pts0, R, t)
             print("Opening open3d visualization of result...")
             visualize_trafo([pts0tr, pts1])
 
 
-def visualize(frames, params_initial):
+def visualize_tracking(frames, params_initial):
     """
     For a frames array of **a single sensor**, a tkinter param selection will be shown,
-    from which the open3d visualization can be started.
+    from which the open3d tracking visualization can be started.
+
+    Will call all clustering/tracking functions independently of the --transformation CLI argument.
 
     :param frames: sensor data to use
     :param params_initial: initial parameters to be loaded to UI
     """
 
-    def visualize_with_params(_frames, params):
+    def visualize_tracking_with_params(_frames, params):
         """
         gets **frames for single sensor** and params, calls track_marker and opens open3d visualization.
         Is called as callback from tkinter UI once the "calculate" button is pressed.
@@ -159,7 +188,7 @@ def visualize(frames, params_initial):
 
     create_gui(
         params_initial,
-        callback=lambda params_from_gui: visualize_with_params(frames, params_from_gui),
+        callback=lambda params_from_gui: visualize_tracking_with_params(frames, params_from_gui),
     )
 
 

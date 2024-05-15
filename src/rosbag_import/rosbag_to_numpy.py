@@ -53,6 +53,10 @@ def bag_to_numpy(rosbag_filename, topic_filter=None):
         # TODO:
         #  docstring says "For more efficient access use read_points directly.". Is this the performance problem?
         #  or see sensor_msgs.PointCloud2's deserialize_numpy method, which may do what we want.
+        #  It seems like the rospy version used from https://rospypi.github.io/simple/ is very outdated.
+        #  point_cloud2.read_points *should*
+        #  (https://docs.ros.org/en/ros2_packages/rolling/api/sensor_msgs_py/sensor_msgs_py.point_cloud2.html#sensor_msgs_py.point_cloud2.read_points)
+        #  return a numpy array, so it has probably been rewritten.
 
         if topic not in data:
             # this is the first frame for this sensor. We did not know the number of points per frame yet and
