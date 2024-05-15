@@ -68,25 +68,28 @@ def find_marker_single_frame(clusters, max_distance, min_velocity, max_vector_an
         get_nearest_neighbor_trace(clusters, start_i) for start_i in range(len(clusters[-1]))
     ]
 
+    # We need the index of the centers which pass the filters, so we apply the filters on the enumerated list
+    enumerated = enumerate(traces)
+
     # Drop all traces which are too short
-    length_filter = np.array(list(map(
-        lambda t: len(t) == len(clusters),
-        traces
-    )))
+    enumerated = filter(
+        lambda t: len(t[1]) == len(clusters),
+        enumerated
+    )
 
     # Drop all traces where the distance between two points is greater than `max_distance`.
     # (The reflector is expected to not move too quickly/jump.)
-    distance_filter = np.array(list(map(
-        lambda t: np.all(np.linalg.norm(np.diff(t[..., :3], axis=0), axis=1) <= max_distance),
-        traces
-    )))
+    enumerated = filter(
+        lambda t: np.all(np.linalg.norm(np.diff(t[1][..., :3], axis=0), axis=1) <= max_distance),
+        enumerated
+    )
 
     # Drop all traces where the average cluster velocity is too low.
     # (The reflector is expected to move at a consistent speed. This filters out bright static objects.)
-    velocity_filter = np.array(list(map(
-        lambda t: np.mean(np.linalg.norm(np.diff(t[..., :3], axis=0), axis=1)) > min_velocity,
-        traces
-    )))
+    enumerated = filter(
+        lambda t: np.mean(np.linalg.norm(np.diff(t[1][..., :3], axis=0), axis=1)) > min_velocity,
+        enumerated
+    )
 
     # Drop all traces where the angle between two update vectors (deltas) is too big.
     # (The reflector is expected to move at a consistent speed.)
@@ -101,15 +104,18 @@ def find_marker_single_frame(clusters, max_distance, min_velocity, max_vector_an
         # return whether this trace passes the filter
         return np.all(angle_rad <= max_vector_angle_rad)
 
-    angle_filter = np.array(list(map(check_angle, traces)))
+    enumerated = filter(
+        lambda t: check_angle(t[1]),
+        enumerated
+    )
 
-    combined_filter = length_filter & distance_filter & velocity_filter & angle_filter
-    if sum(combined_filter) == 0:
+    enumerated = list(enumerated)
+    if len(enumerated) == 0:
         # did not find unique solution
         return None, "NO_MATCH"
-    elif sum(combined_filter) > 1:
+    elif len(enumerated) > 1:
         return None, "MULTIPLE_MATCHES"
-    i = np.argmax(combined_filter)  # get index of the chosen cluster
+    i = enumerated[0][0]  # get index of the chosen cluster
     return (clusters[-1][i, :3], i), "UNIQUE_MATCH"  # only return xyz of cluster
     # TODO do we even need the intensity mean and number of clusters in this analysis? If not, don't pass
     #  them in here and remove all the [:3] and [..., :3] etc.!
