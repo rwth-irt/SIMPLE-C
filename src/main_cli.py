@@ -39,8 +39,6 @@ def main():
                         help="Show the transformed reflector points in open3d and a plot of the distance between"
                              "corresponding points to verify correct alignment."
                              "(Only applies if --transformation is used.)")
-                        help="Show open3d visualization of points with applied transformation")
-
 
     args = parser.parse_args()
 
