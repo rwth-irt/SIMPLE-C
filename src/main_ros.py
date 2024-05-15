@@ -1,14 +1,15 @@
 #!/usr/bin/env python
-import json
-import pathlib
+
 from collections import deque
 from datetime import datetime, timedelta
 
 import numpy as np
-import rospy
-from geometry_msgs.msg import TransformStamped, Transform, Vector3, Quaternion
+import rclpy
+from geometry_msgs.msg import TransformStamped
+from rclpy.node import Node
 from sensor_msgs import point_cloud2
 
+import parameters
 from frame import Frame
 from locate_reflector.track_marker import find_marker_single_frame
 from parameters import params
@@ -19,7 +20,7 @@ from transformation import calc_transformation_scipy, Transformation
 expiry_duration = timedelta(seconds=1 / float(params["sample_rate_Hz"]) / 2)
 
 
-class OnlineCalibrator:
+class OnlineCalibrator(Node):
     def __init__(self, sensor_pairs: list[tuple[str, str]]):
         """
         Create an object to manage online calibration for multiple Lidar sensors/sensor pairs.
@@ -28,7 +29,11 @@ class OnlineCalibrator:
 
         :param sensor_pairs: list with 2-tuples of sensor topics. One sensor may appear in multiple tuples.
         """
-        # extract unique topics from pairs and create pair calibrators
+
+        # init ROS
+        super().__init__("online_calibration")
+        trafo_publisher = self.create_publisher(TransformStamped, "transformations", queue_size=10)
+
         topics = set()  # collect the topics we have to subscribe to
         for a, b in sensor_pairs:
             topics.add(a)
@@ -40,15 +45,17 @@ class OnlineCalibrator:
         }
 
         # initialize ROS node, add publishers and subscribe to sensors
-        trafo_pub = rospy.Publisher("transformations", TransformStamped, queue_size=10)
-        for t in topics:
+        for topic in topics:
             # subscribe to all sensors
-            rospy.Subscriber(t, point_cloud2, lambda pc2: self.on_message(t, pc2))
-        rospy.init_node("online_calibration", anonymous=True)
+            self.create_subscription(
+                point_cloud2.PointCloud2,
+                topic,
+                lambda pc2: self.on_message(topic, pc2)
+            )
 
         # create pair calibrators
         for a, b in sensor_pairs:
-            pc = PairCalibrator(a, b, trafo_pub)
+            pc = PairCalibrator(self, a, b, trafo_publisher)
             self.pair_calibrators[a].append(pc)
             self.pair_calibrators[b].append(pc)
 
@@ -63,7 +70,8 @@ class OnlineCalibrator:
 
 class PairCalibrator:
 
-    def __init__(self, topic1: str, topic2: str, trafo_publisher: rospy.Publisher):
+    def __init__(self, node, topic1: str, topic2: str, trafo_publisher):
+        self.node = node
         self.frame_buffer_1: deque[Frame] = deque(maxlen=int(params["window size"]))
         self.frame_buffer_2: deque[Frame] = deque(maxlen=int(params["window size"]))
         self.topic1 = topic1
@@ -137,34 +145,35 @@ class PairCalibrator:
 
     def new_transformation(self, trafo: Transformation):
         self.transformation = trafo
-        # http://docs.ros.org/en/api/geometry_msgs/html/msg/TransformStamped.html
-        # http://docs.ros.org/en/api/geometry_msgs/html/msg/Transform.html
-        self.trafo_publisher.publish(TransformStamped(
-            # Trafo is chosen such that it transforms P (frame1) to Q (frame2)
-            child_frame_id=self.topic1,
-            transform=Transform(
-                translation=Vector3(
-                    x=trafo.t[0],
-                    y=trafo.t[1],
-                    z=trafo.t[2]
-                ),
-                rotation=Quaternion(
-                    x=trafo.R_quat[0],
-                    y=trafo.R_quat[1],
-                    z=trafo.R_quat[2],
-                    w=trafo.R_quat[3]
-                )
-            )
-        ))
+        # Adapted from http://docs.ros.org/en/humble/Tutorials/Intermediate/Tf2/Writing-A-Tf2-Broadcaster-Py.html
+        t = TransformStamped()
+        t.header.stamp = self.node.get_clock().now().to_msg()
+        # Trafo is chosen such that it transforms P (frame1) to Q (frame2)
+        t.header.frame_id = self.topic2
+        t.child_frame_id = self.topic1
+        t.transform.translation.x = trafo.t[0]
+        t.transform.translation.y = trafo.t[1]
+        t.transform.translation.z = trafo.t[2]
+        t.transform.rotation.x = trafo.R_quat[0]
+        t.transform.rotation.y = trafo.R_quat[1]
+        t.transform.rotation.z = trafo.R_quat[2]
+        t.transform.rotation.w = trafo.R_quat[3]
+        self.trafo_publisher.publish(t)
 
 
-if __name__ == '__main__':
-    # load reflector tracking parameters
-    paramfile = pathlib.Path(__file__).parent.parent.absolute() / "default_params.json"
-    # TODO look for manually passed file/get from somewhere?
-    #  Integrate with topics from RSlidar-SDK config file and Docker container?
-    with open(paramfile, "r") as f:
-        params = json.load(f)
-    sensor_pairs = []  # TODO get from somewhere
-    OnlineCalibrator(params, sensor_pairs)
-    rospy.spin()
+def main(args=None):
+    rclpy.init(args=args)
+
+    # TODO get parameter path and sensor pairs from some config/parameters
+    parameters.init()
+    DEBUG_PAIRS = [("/rslidar_points_l", "/rslidar_points_r")]
+    calibrator = OnlineCalibrator(DEBUG_PAIRS)
+    try:
+        rclpy.spin(calibrator)
+    except KeyboardInterrupt:
+        print("Got KeyboardInterrupt, stopping.")
+    rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
