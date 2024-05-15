@@ -118,23 +118,23 @@ def main():
         filtered = filter_locations(marker_locations, trafo_topics)
 
         print(f"Calculating transformation using {len(filtered[trafo_topics[0]])} points")
-        R, t, _, sensitivity = calc_transformation_scipy(filtered[trafo_topics[0]], filtered[trafo_topics[1]])
+        trafo = calc_transformation_scipy(filtered[trafo_topics[0]], filtered[trafo_topics[1]])
 
         print("Transformation result:\nR=")
-        print(R)
+        print(trafo.R)
         print("t =")
-        print(t)
+        print(trafo.t)
         print("sensitivity matrix for rotation =")
-        print(sensitivity)
+        print(trafo.R_sensitivity)
 
         if args.visualize_alignment:
             # show verification plot with distances between matched points
             plot_match_distances(
-                apply_transformation(filtered[trafo_topics[0]], R, t),
+                apply_transformation(filtered[trafo_topics[0]], trafo),
                 filtered[trafo_topics[1]]
             )
             visualize_trafo([
-                apply_transformation(filtered[trafo_topics[0]], R, t),
+                apply_transformation(filtered[trafo_topics[0]], trafo),
                 filtered[trafo_topics[1]]
             ], draw_point_match_markers=True)
 
@@ -142,7 +142,7 @@ def main():
             # transform point cloud from first frame for visualization
             pts0 = data[trafo_topics[0]][0, ..., :3]
             pts1 = data[trafo_topics[1]][0, ..., :3]
-            pts0tr = apply_transformation(pts0, R, t)
+            pts0tr = apply_transformation(pts0, trafo)
             print("Opening open3d visualization of result...")
             visualize_trafo([pts0tr, pts1])
 
