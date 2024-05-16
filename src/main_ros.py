@@ -61,7 +61,7 @@ class OnlineCalibrator(Node):
 
     def on_message(self, topic: str, pc2: point_cloud2):
         data = np.array(point_cloud2.read_points_list_numpy(pc2, skip_nans=True))
-        frame = Frame(data, datetime.now())
+        frame = Frame(data, datetime.now()) # TODO the frame should get the original timestamp from the sensor not from system
         # pass the new frame to all interested PairCalibrators, which will perform
         # buffering and calculate a transformation if possible
         for pc in self.pair_calibrators[topic]:
@@ -89,6 +89,8 @@ class PairCalibrator:
         else:
             assert topic == self.topic2
             self.last2 = f
+        # TODO this checks temporal difference between two measurements in the same sensor not across two sensors
+        # TODO do not use current system time but timestamps of the measurements
         # check if last frames are expired
         if datetime.now() - self.last1.timestamp > expiry_duration:
             self.last1 = None
@@ -102,6 +104,7 @@ class PairCalibrator:
         self.last1 = None
         self.last2 = None
 
+        # TODO transformation shall only be called if the buffer contain > 3 points
         self.update_transformation()
 
     @staticmethod
@@ -141,9 +144,11 @@ class PairCalibrator:
             min(rl1.weight, rl2.weight)
             for rl1, rl2 in zip(self.reflector_locations_1, self.reflector_locations_2)
         ])
-        self.new_transformation(calc_transformation_scipy(P, Q, weights))
 
-    def new_transformation(self, trafo: Transformation):
+        # TODO Here the weights matrix needs to be updated if weights based on prior transformations are available
+        self.publish_transformation(calc_transformation_scipy(P, Q, weights))
+
+    def publish_transformation(self, trafo: Transformation):
         self.transformation = trafo
         # Adapted from http://docs.ros.org/en/humble/Tutorials/Intermediate/Tf2/Writing-A-Tf2-Broadcaster-Py.html
         t = TransformStamped()

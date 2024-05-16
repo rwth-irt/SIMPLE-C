@@ -1,10 +1,11 @@
 from dataclasses import dataclass
+from typing import Dict, List
 
 import numpy as np
 from scipy.spatial.transform import Rotation
 
 
-def filter_locations(marker_locations: dict[str, list[np.ndarray]], topics: list[str]):
+def filter_locations(marker_locations: Dict[str, List[np.ndarray]], topics: List[str]):
     """
     Returns a filtered copy of `marker_locations` which only contains the points from frames where a location is
     present for each sensor/topic.
