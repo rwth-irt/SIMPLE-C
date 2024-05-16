@@ -7,3 +7,6 @@ data
 video/pngs
 *.mp4
 .idea
+build
+install
+log
