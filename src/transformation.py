@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import numpy as np
 from scipy.spatial.transform import Rotation
 
@@ -64,7 +66,17 @@ def calc_transformation(P: np.array, Q: np.array):
     return R, t
 
 
-def calc_transformation_scipy(P: np.ndarray, Q: np.ndarray, weights: np.ndarray = None):
+@dataclass
+class Transformation:
+    R: np.ndarray  # Rotation matrix
+    t: np.ndarray  # Translation vector
+    R_quat: np.ndarray  # Rotation quaternion
+    R_sensitivity: np.ndarray  # Sensitivity matrix for R
+
+    # TODO add calculation of (un)certainty
+
+
+def calc_transformation_scipy(P: np.ndarray, Q: np.ndarray, weights: np.ndarray = None) -> Transformation:
     """
     Apply the Kabsch algorithm [1]_ using the implementation in SciPy [2]_.
 
@@ -80,8 +92,7 @@ def calc_transformation_scipy(P: np.ndarray, Q: np.ndarray, weights: np.ndarray 
         Numpy array of shape (N, 3).
     :param Q: The other set of points. Numpy array of shape (N, 3).
     :param weights: Optional weights (if None, all points are weighted equally). Numpy array of shape (N).
-    :return: Tuple containing: (Rotation matrix, translation vector, Rotation quaternion, sensitivity matrix
-        of rotation).
+    :return: An instance of the Transformation dataclass.
     """
     assert len(P) == len(Q)
     # !!! Q, P flipped compared to own implementation!
@@ -100,16 +111,15 @@ def calc_transformation_scipy(P: np.ndarray, Q: np.ndarray, weights: np.ndarray 
     # See https://igl.ethz.ch/projects/ARAP/svd_rot.pdf on how to calculate the corresponding translation vector.
     t = q_bar - Rm @ p_bar
 
-    return Rm, t, Rq, sensitivity
+    return Transformation(Rm, t, Rq, sensitivity)
 
 
-def apply_transformation(points, R, t):
+def apply_transformation(points: np.ndarray, trafo: Transformation):
     """
     Apply the transformation on multiple points.
 
     :param points: a numpy array containing multiple 3d points to transform
-    :param R: the rotation matrix
-    :param t: the translation vector
+    :param trafo: a Transformation dataclass instance
     :return: `points`, transformed
     """
-    return (R @ points.T).T + t
+    return (trafo.R @ points.T).T + trafo.t
