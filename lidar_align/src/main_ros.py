@@ -59,9 +59,8 @@ class OnlineCalibrator(Node):
         print("Waiting for sensor data...")
 
     def on_message(self, topic: str, pc2: point_cloud2):
-        data = np.array(point_cloud2.read_points_numpy(pc2, skip_nans=True))
-        # TODO use timestamp from Sensor/ROS and not system time
-        frame = Frame(data, datetime.now())
+        data = np.array(point_cloud2.read_points_list_numpy(pc2, skip_nans=True))
+        frame = Frame(data, datetime.now()) # TODO the frame should get the original timestamp from the sensor not from system
         # pass the new frame to all interested PairCalibrators, which will perform
         # buffering and calculate a transformation if possible
         for pc in self.pair_calibrators[topic]:
@@ -163,7 +162,6 @@ class PairCalibrator:
             min(rl1.weight, rl2.weight)
             for rl1, rl2 in zip(self.reflector_locations_1, self.reflector_locations_2)
         ])
-        self.new_transformation(calc_transformation_scipy(P, Q, weights))
 
     def new_transformation(self, trafo: Transformation):
         # TODO remove ROS-specific logic from this class for logic-CLI-ROS separation.
