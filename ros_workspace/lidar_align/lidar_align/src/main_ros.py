@@ -12,12 +12,8 @@ from sensor_msgs_py import point_cloud2
 from . import parameters
 from .frame import Frame
 from .locate_reflector.track_marker import find_marker_single_frame
-from .parameters import params
 from .reflector_location import ReflectorLocation
 from .transformation import calc_transformation_scipy, Transformation
-
-# Maximum age for a frame before it expires
-expiry_duration = timedelta(seconds=1 / float(params["sample_rate_Hz"]) / 2)
 
 
 class OnlineCalibrator(Node):
@@ -32,7 +28,7 @@ class OnlineCalibrator(Node):
 
         # init ROS
         super().__init__("online_calibration")
-        trafo_publisher = self.create_publisher(TransformStamped, "transformations", queue_size=10)
+        trafo_publisher = self.create_publisher(TransformStamped, "transformations", 10)
 
         topics = set()  # collect the topics we have to subscribe to
         for a, b in sensor_pairs:
@@ -50,7 +46,8 @@ class OnlineCalibrator(Node):
             self.create_subscription(
                 point_cloud2.PointCloud2,
                 topic,
-                lambda pc2: self.on_message(topic, pc2)
+                lambda pc2, topic=topic: self.on_message(topic, pc2),
+                10
             )
 
         # create pair calibrators
@@ -58,9 +55,11 @@ class OnlineCalibrator(Node):
             pc = PairCalibrator(self, a, b, trafo_publisher)
             self.pair_calibrators[a].append(pc)
             self.pair_calibrators[b].append(pc)
+        
+        print("Waiting for sensor data...")
 
     def on_message(self, topic: str, pc2: point_cloud2):
-        data = np.array(point_cloud2.read_points_list_numpy(pc2, skip_nans=True))
+        data = np.array(point_cloud2.read_points_numpy(pc2, skip_nans=True))
         frame = Frame(data, datetime.now())
         # pass the new frame to all interested PairCalibrators, which will perform
         # buffering and calculate a transformation if possible
@@ -72,8 +71,11 @@ class PairCalibrator:
 
     def __init__(self, node, topic1: str, topic2: str, trafo_publisher):
         self.node = node
-        self.frame_buffer_1: deque[Frame] = deque(maxlen=int(params["window size"]))
-        self.frame_buffer_2: deque[Frame] = deque(maxlen=int(params["window size"]))
+        # Maximum age for a frame before it expires
+        self.expiry_duration = timedelta(seconds=1 / float(parameters.params["sample_rate_Hz"]) / 2)
+
+        self.frame_buffer_1: deque[Frame] = deque(maxlen=int(parameters.params["window size"]))
+        self.frame_buffer_2: deque[Frame] = deque(maxlen=int(parameters.params["window size"]))
         self.topic1 = topic1
         self.topic2 = topic2
         self.last1: Frame | None = None
@@ -84,37 +86,45 @@ class PairCalibrator:
         self.trafo_publisher = trafo_publisher
 
     def new_frame(self, f: Frame, topic: str):
+        # store temporarily
         if topic == self.topic1:
             self.last1 = f
         else:
             assert topic == self.topic2
             self.last2 = f
-        # check if last frames are expired
-        if datetime.now() - self.last1.timestamp > expiry_duration:
-            self.last1 = None
-        if datetime.now() - self.last2.timestamp > expiry_duration:
-            self.last2 = None
         if self.last1 is None or self.last2 is None:
             return
+
+        # check if temporary frames are expired
+        if datetime.now() - self.last1.timestamp > self.expiry_duration:
+            print(f"Frame for {self.topic1} expired.")
+            self.last1 = None
+        if datetime.now() - self.last2.timestamp > self.expiry_duration:
+            self.last2 = None
+            print(f"Frame for {self.topic1} expired.")
+        if self.last1 is None or self.last2 is None:
+            return
+        
         # if we have frames for both sensors which are not expired, add them to buffer and calculate transformation
         self.frame_buffer_1.append(self.last1)
         self.frame_buffer_2.append(self.last2)
         self.last1 = None
         self.last2 = None
 
-        self.update_transformation()
+        self.new_frame_pair()
 
     @staticmethod
     def calc_marker_location(buffer: deque[Frame]):
         centers = [f.cluster_centers for f in buffer]
         return find_marker_single_frame(
             centers,
-            max_distance=params["maximum neighbor distance"],
-            min_velocity=params["minimum velocity"],
-            max_vector_angle_rad=2 * np.pi * params["max. vector angle [deg]"] / 360,
+            max_distance=parameters.params["maximum neighbor distance"],
+            min_velocity=parameters.params["minimum velocity"],
+            max_vector_angle_rad=2 * np.pi * parameters.params["max. vector angle [deg]"] / 360,
         )
 
-    def update_transformation(self):
+    def new_frame_pair(self):
+        print("new frame pair")
         # first call calculate_marker_location of latest frames
         result1, status1 = PairCalibrator.calc_marker_location(self.frame_buffer_1)
         result2, status2 = PairCalibrator.calc_marker_location(self.frame_buffer_2)
@@ -124,6 +134,7 @@ class PairCalibrator:
             # Only continue if reflector is found in both new frames
             return
 
+        print("reflector found in both frames")
         # Save the obtained reflector locations
         cluster1, index1 = result1
         cluster1points = self.frame_buffer_1[-1].get_cluster_points(index1)
@@ -133,6 +144,12 @@ class PairCalibrator:
         cluster2points = self.frame_buffer_2[-1].get_cluster_points(index2)
         self.reflector_locations_2.append(ReflectorLocation(cluster2, cluster2points))
 
+        if len(self.reflector_locations_1) < 3:
+            # we need at least 3 point pairs
+            print("not enough point pairs yet")
+            return
+
+        print("calculating new transformation")
         # Recalculate and publish transformation with new data
         P = np.ndarray([rl.cluster_mean[:3] for rl in self.reflector_locations_1])
         Q = np.ndarray([rl.cluster_mean[:3] for rl in self.reflector_locations_2])
@@ -159,15 +176,18 @@ class PairCalibrator:
         t.transform.rotation.z = trafo.R_quat[2]
         t.transform.rotation.w = trafo.R_quat[3]
         self.trafo_publisher.publish(t)
+        print(t) # TODO DEBUG
 
 
 def main(args=None):
     rclpy.init(args=args)
 
-    # TODO get parameter path and sensor pairs from some config/parameters
-    parameters.init()
+    # TODO get parameter file path and sensor pairs from some config/parameters
+    parameters.init("/calib_src/default_params.json")
     DEBUG_PAIRS = [("/rslidar_points_l", "/rslidar_points_r")]
-    calibrator = OnlineCalibrator(DEBUG_PAIRS)
+    pairs = DEBUG_PAIRS
+
+    calibrator = OnlineCalibrator(pairs)
     try:
         rclpy.spin(calibrator)
     except KeyboardInterrupt:
