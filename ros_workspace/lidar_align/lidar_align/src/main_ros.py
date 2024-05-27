@@ -55,7 +55,7 @@ class OnlineCalibrator(Node):
             pc = PairCalibrator(self, a, b, trafo_publisher)
             self.pair_calibrators[a].append(pc)
             self.pair_calibrators[b].append(pc)
-        
+
         print("Waiting for sensor data...")
 
     def on_message(self, topic: str, pc2: point_cloud2):
@@ -104,7 +104,7 @@ class PairCalibrator:
             print(f"Frame for {self.topic1} expired.")
         if self.last1 is None or self.last2 is None:
             return
-        
+
         # if we have frames for both sensors which are not expired, add them to buffer and calculate transformation
         self.frame_buffer_1.append(self.last1)
         self.frame_buffer_2.append(self.last2)
@@ -130,6 +130,8 @@ class PairCalibrator:
         result2, status2 = PairCalibrator.calc_marker_location(self.frame_buffer_2)
         # TODO do something with the status field...
 
+        print(f"{' ' * 20} status1: {str(status1).ljust(20)} status2: {str(status2).ljust(20)}")
+
         if result1 is None or result2 is None:
             # Only continue if reflector is found in both new frames
             return
@@ -151,8 +153,8 @@ class PairCalibrator:
 
         print("calculating new transformation")
         # Recalculate and publish transformation with new data
-        P = np.ndarray([rl.cluster_mean[:3] for rl in self.reflector_locations_1])
-        Q = np.ndarray([rl.cluster_mean[:3] for rl in self.reflector_locations_2])
+        P = np.array([rl.cluster_mean[:3] for rl in self.reflector_locations_1])
+        Q = np.array([rl.cluster_mean[:3] for rl in self.reflector_locations_2])
         # TODO discuss how to calculate the single weight for each point pair?
         weights = np.array([
             min(rl1.weight, rl2.weight)
@@ -161,6 +163,14 @@ class PairCalibrator:
         self.new_transformation(calc_transformation_scipy(P, Q, weights))
 
     def new_transformation(self, trafo: Transformation):
+
+        print("Transformation result:\nR=")
+        print(trafo.R)
+        print("t =")
+        print(trafo.t)
+        print("sensitivity matrix for rotation =")
+        print(trafo.R_sensitivity)
+
         self.transformation = trafo
         # Adapted from http://docs.ros.org/en/humble/Tutorials/Intermediate/Tf2/Writing-A-Tf2-Broadcaster-Py.html
         t = TransformStamped()
@@ -176,7 +186,6 @@ class PairCalibrator:
         t.transform.rotation.z = trafo.R_quat[2]
         t.transform.rotation.w = trafo.R_quat[3]
         self.trafo_publisher.publish(t)
-        print(t) # TODO DEBUG
 
 
 def main(args=None):
