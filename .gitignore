@@ -4,6 +4,9 @@ __pycache__
 *.bag
 *.npy
 data
-video/pngs
+misc/video/pngs
 *.mp4
 .idea
+build
+install
+log

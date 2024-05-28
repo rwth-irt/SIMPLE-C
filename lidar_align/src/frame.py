@@ -2,8 +2,8 @@ from datetime import datetime
 
 import numpy as np
 
-import parameters
-from locate_reflector.find_cluster_centers import get_cluster_centers_single_frame
+from . import parameters
+from .locate_reflector.find_cluster_centers import get_cluster_centers_single_frame
 
 
 # TODO document, especially shape and content of numpy arrays!
