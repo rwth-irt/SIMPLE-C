@@ -60,6 +60,7 @@ class OnlineCalibrator(Node):
 
     def on_message(self, topic: str, pc2: point_cloud2):
         data = np.array(point_cloud2.read_points_numpy(pc2, skip_nans=True))
+        # TODO use timestamp from Sensor/ROS and not system time
         frame = Frame(data, datetime.now())
         # pass the new frame to all interested PairCalibrators, which will perform
         # buffering and calculate a transformation if possible
@@ -96,12 +97,13 @@ class PairCalibrator:
             return
 
         # check if temporary frames are expired
-        if datetime.now() - self.last1.timestamp > self.expiry_duration:
-            print(f"Frame for {self.topic1} expired.")
+        if self.last1.timestamp - self.last2.timestamp > self.expiry_duration:
             self.last1 = None
-        if datetime.now() - self.last2.timestamp > self.expiry_duration:
-            self.last2 = None
             print(f"Frame for {self.topic1} expired.")
+        if self.last2.timestamp - self.last1.timestamp > self.expiry_duration:
+            self.last2 = None
+            print(f"Frame for {self.topic2} expired.")
+
         if self.last1 is None or self.last2 is None:
             return
 
@@ -130,6 +132,7 @@ class PairCalibrator:
         result2, status2 = PairCalibrator.calc_marker_location(self.frame_buffer_2)
         # TODO do something with the status field...
 
+        # TODO use some logging system, remove those debug prints
         print(f"{' ' * 20} status1: {str(status1).ljust(20)} status2: {str(status2).ljust(20)}")
 
         if result1 is None or result2 is None:
@@ -163,6 +166,8 @@ class PairCalibrator:
         self.new_transformation(calc_transformation_scipy(P, Q, weights))
 
     def new_transformation(self, trafo: Transformation):
+        # TODO remove ROS-specific logic from this class for logic-CLI-ROS separation.
+        #  -> Move this function out of this class to an external callback.
 
         print("Transformation result:\nR=")
         print(trafo.R)
