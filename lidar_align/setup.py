@@ -20,7 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            "main = lidar_align.src.main_ros:main"
+            "main = src.main_ros:main"
         ],
     },
 )
