@@ -31,9 +31,9 @@ class Frame:
     def _calc_clusters(self):
         self._cluster_centers, self._clustering = get_cluster_centers_single_frame(
             self.data,
-            rel_intensity_threshold=parameters.params["relative intensity threshold"],
-            DBSCAN_epsilon=parameters.params["DBSCAN epsilon"],
-            DBSCAN_min_samples=int(parameters.params["DBSCAN min samples"]),
+            rel_intensity_threshold=parameters.get_param("relative intensity threshold"),
+            DBSCAN_epsilon=parameters.get_param("DBSCAN epsilon"),
+            DBSCAN_min_samples=int(parameters.get_param("DBSCAN min samples")),
         )
 
     def get_cluster_points(self, index: int):

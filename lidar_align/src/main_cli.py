@@ -99,18 +99,18 @@ def main():
             print("  calculating cluster centers")
             centers = get_cluster_centers_multiple_frames(
                 data[topic],
-                rel_intensity_threshold=parameters.params["relative intensity threshold"],
-                DBSCAN_epsilon=parameters.params["DBSCAN epsilon"],
-                DBSCAN_min_samples=int(parameters.params["DBSCAN min samples"]),
+                rel_intensity_threshold=parameters.get_param("relative intensity threshold"),
+                DBSCAN_epsilon=parameters.get_param("DBSCAN epsilon"),
+                DBSCAN_min_samples=int(parameters.get_param("DBSCAN min samples")),
                 create_visualization=False,
             )
             print("  tracking marker")
             selected_locations, _ = track_marker_multiple_frames(
                 centers,
-                max_distance=parameters.params["maximum neighbor distance"],
-                min_velocity=parameters.params["minimum velocity"],
-                window_size=int(parameters.params["window size"]),
-                max_vector_angle_rad=2 * np.pi * parameters.params["max. vector angle [deg]"] / 360,
+                max_distance=parameters.get_param("maximum neighbor distance"),
+                min_velocity=parameters.get_param("minimum velocity"),
+                window_size=int(parameters.get_param("window size")),
+                max_vector_angle_rad=2 * np.pi * parameters.get_param("max. vector angle [deg]") / 360,
             )
             marker_locations[topic] = selected_locations
 
@@ -174,10 +174,10 @@ def visualize_tracking(frames, params_initial):
         )
         marker_pos, selection_indices = track_marker_multiple_frames(
             centers,
-            max_distance=params["maximum neighbor distance"],
-            min_velocity=params["minimum velocity"],
-            window_size=int(params["window size"]),
-            max_vector_angle_rad=2 * np.pi * params["max. vector angle [deg]"] / 360,
+            max_distance=parameters.get_param("maximum neighbor distance"),
+            min_velocity=parameters.get_param("minimum velocity"),
+            window_size=int(parameters.get_param("window size")),
+            max_vector_angle_rad=2 * np.pi * parameters.get_param("max. vector angle [deg]") / 360,
         )
 
         prepare_tracking_visualization(selection_indices, visualization)

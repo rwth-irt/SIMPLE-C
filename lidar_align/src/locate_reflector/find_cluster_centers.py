@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.cluster import DBSCAN
+from typing import Tuple
 
 
 def get_cluster_centers_single_frame(
@@ -7,7 +8,7 @@ def get_cluster_centers_single_frame(
         rel_intensity_threshold: float,
         DBSCAN_epsilon: float,
         DBSCAN_min_samples: int
-) -> tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Searches for bright (high intensity) clusters in a given Lidar Frame. Performs the following steps:
 
