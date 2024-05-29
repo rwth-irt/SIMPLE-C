@@ -14,7 +14,7 @@ from . import parameters
 from .frame import Frame
 from .locate_reflector.track_marker import find_marker_single_frame
 from .reflector_location import ReflectorLocation
-from .transformation import Transformation
+from .transformation import Transformation, calc_transformation_scipy
 
 
 class OnlineCalibrator(Node):
@@ -181,6 +181,7 @@ class PairCalibrator:
             min(rl1.weight, rl2.weight)
             for rl1, rl2 in zip(self.reflector_locations_1, self.reflector_locations_2)
         ])
+        self.new_transformation(calc_transformation_scipy(P, Q, weights))
 
     def new_transformation(self, trafo: Transformation):
         # TODO remove ROS-specific logic from this class for logic-CLI-ROS separation.
