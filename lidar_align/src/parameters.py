@@ -10,6 +10,7 @@ parameter_definitions = {
     "max. vector angle [deg]": "float",
     "sample_rate_Hz": "float",
 }
+# TODO should we set defaults here? Would allow to not pass any extra file.
 
 
 def ros_declare_parameters(rosnode):
