@@ -72,10 +72,10 @@ class PairCalibrator:
     def __init__(self, node, topic1: str, topic2: str, trafo_publisher):
         self.node = node
         # Maximum age for a frame before it expires
-        self.expiry_duration = timedelta(seconds=1 / float(parameters.params["sample_rate_Hz"]) / 2)
+        self.expiry_duration = timedelta(seconds=1 / float(parameters.get_param("sample_rate_Hz")) / 2)
 
-        self.frame_buffer_1: deque[Frame] = deque(maxlen=int(parameters.params["window size"]))
-        self.frame_buffer_2: deque[Frame] = deque(maxlen=int(parameters.params["window size"]))
+        self.frame_buffer_1: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
+        self.frame_buffer_2: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
         self.topic1 = topic1
         self.topic2 = topic2
         self.last1: Frame | None = None
@@ -119,9 +119,9 @@ class PairCalibrator:
         centers = [f.cluster_centers for f in buffer]
         return find_marker_single_frame(
             centers,
-            max_distance=parameters.params["maximum neighbor distance"],
-            min_velocity=parameters.params["minimum velocity"],
-            max_vector_angle_rad=2 * np.pi * parameters.params["max. vector angle [deg]"] / 360,
+            max_distance=parameters.get_param("maximum neighbor distance"),
+            min_velocity=parameters.get_param("minimum velocity"),
+            max_vector_angle_rad=2 * np.pi * parameters.get_param("max. vector angle [deg]") / 360,
         )
 
     def new_frame_pair(self):
