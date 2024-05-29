@@ -1,0 +1,10 @@
+/online_calibration:
+  ros__parameters:
+    "relative intensity threshold": 0.7
+    "DBSCAN epsilon": 0.4
+    "DBSCAN min samples": 9
+    "maximum neighbor distance": 0.4
+    "minimum velocity": 0.05
+    "window size": 8
+    "max. vector angle [deg]": 80.0
+    "sample_rate_Hz": 10.0

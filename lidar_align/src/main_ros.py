@@ -28,6 +28,9 @@ class OnlineCalibrator(Node):
 
         # init ROS
         super().__init__("online_calibration")
+        parameters.ros_declare_parameters(self)
+        parameters.init_from_rosnode(self)
+
         trafo_publisher = self.create_publisher(TransformStamped, "transformations", 10)
 
         topics = set()  # collect the topics we have to subscribe to
@@ -195,7 +198,6 @@ def main(args=None):
     rclpy.init(args=args)
 
     # TODO get parameter file path and sensor pairs from some config/parameters
-    parameters.init("/calib_src/default_params.json")
     DEBUG_PAIRS = [("/rslidar_points_l", "/rslidar_points_r")]
     pairs = DEBUG_PAIRS
 
