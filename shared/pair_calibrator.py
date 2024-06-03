@@ -41,13 +41,12 @@ class PairCalibrator:
 
         # check if temporary frames are expired
         if self.last1.timestamp - self.last2.timestamp > self.expiry_duration:
-            self.last1 = None
             print(f"Frame for {self.topic1} expired.")
+            self.last1 = None
+            return
         if self.last2.timestamp - self.last1.timestamp > self.expiry_duration:
-            self.last2 = None
             print(f"Frame for {self.topic2} expired.")
-
-        if self.last1 is None or self.last2 is None:
+            self.last2 = None
             return
 
         # if we have frames for both sensors which are not expired, add them to buffer and calculate transformation
