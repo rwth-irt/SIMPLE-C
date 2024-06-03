@@ -10,11 +10,11 @@ from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from rclpy.node import Node
 from sensor_msgs_py import point_cloud2
 
-from . import parameters
-from .frame import Frame
-from .locate_reflector.track_marker import find_marker_single_frame
-from .reflector_location import ReflectorLocation
-from .transformation import Transformation, calc_transformation_scipy
+from shared import parameters
+from shared.frame import Frame
+from shared.locate_reflector import find_marker_single_frame
+from shared.reflector_location import ReflectorLocation
+from shared.transformation import Transformation, calc_transformation_scipy
 
 
 class OnlineCalibrator(Node):

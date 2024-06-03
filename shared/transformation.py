@@ -111,6 +111,7 @@ def calc_transformation_scipy(P: np.ndarray, Q: np.ndarray, weights: np.ndarray 
 
     # See https://igl.ethz.ch/projects/ARAP/svd_rot.pdf on how to calculate the corresponding translation vector.
     t = q_bar - Rm @ p_bar
+    # TODO sensitivity for translation?
 
     return Transformation(Rm, t, Rq, sensitivity)
 
