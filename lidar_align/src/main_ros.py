@@ -41,9 +41,11 @@ class OnlineCalibrator(Node):
                 type=ParameterType.PARAMETER_STRING
             )
         )
-        sensor_pairs = str(self.get_parameter("sensor_pairs").get_parameter_value().string_value)
-        sensor_pairs = sensor_pairs.split(";")
-        sensor_pairs = [sp.split(",") for sp in sensor_pairs]
+        sensor_pairs_raw = str(self.get_parameter("sensor_pairs").get_parameter_value().string_value)
+        sensor_pairs = [
+            list(map(str.strip, sp.split(",")))
+            for sp in sensor_pairs_raw.split(";")
+        ]
         print(f"Parsed the following sensor pairs: {sensor_pairs}")  # debug/info print
 
         trafo_publisher = self.create_publisher(TransformStamped, "transformations", 10)
