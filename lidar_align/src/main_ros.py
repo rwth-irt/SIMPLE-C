@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import rclpy
 from geometry_msgs.msg import TransformStamped
+from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from rclpy.node import Node
 from sensor_msgs_py import point_cloud2
 
@@ -13,21 +14,40 @@ from . import parameters
 from .frame import Frame
 from .locate_reflector.track_marker import find_marker_single_frame
 from .reflector_location import ReflectorLocation
-from .transformation import calc_transformation_scipy, Transformation
+from .transformation import Transformation, calc_transformation_scipy
 
 
 class OnlineCalibrator(Node):
-    def __init__(self, sensor_pairs: list[tuple[str, str]]):
+    def __init__(self):
         """
         Create an object to manage online calibration for multiple Lidar sensors/sensor pairs.
         Will subscribe to all relevant sensors and pass frames down to respective PairCalibrator instances.
         These will then publish the current transformations as soon as they are available.
 
-        :param sensor_pairs: list with 2-tuples of sensor topics. One sensor may appear in multiple tuples.
+        The list of sensor pairs as well as the other parameters for reflector detection
+        are read from ROS parameters.
         """
 
         # init ROS
         super().__init__("online_calibration")
+        parameters.ros_declare_parameters(self)
+        parameters.init_from_rosnode(self)
+
+        # Get detector pairs from ROS parameter "sensor_pairs"
+        self.declare_parameter(
+            name="sensor_pairs",
+            descriptor=ParameterDescriptor(
+                name="sensor_pairs",
+                type=ParameterType.PARAMETER_STRING
+            )
+        )
+        sensor_pairs_raw = str(self.get_parameter("sensor_pairs").get_parameter_value().string_value)
+        sensor_pairs = [
+            list(map(str.strip, sp.split(",")))
+            for sp in sensor_pairs_raw.split(";")
+        ]
+        print(f"Parsed the following sensor pairs: {sensor_pairs}")  # debug/info print
+
         trafo_publisher = self.create_publisher(TransformStamped, "transformations", 10)
 
         topics = set()  # collect the topics we have to subscribe to
@@ -59,8 +79,9 @@ class OnlineCalibrator(Node):
         print("Waiting for sensor data...")
 
     def on_message(self, topic: str, pc2: point_cloud2):
-        data = np.array(point_cloud2.read_points_list_numpy(pc2, skip_nans=True))
-        frame = Frame(data, datetime.now()) # TODO the frame should get the original timestamp from the sensor not from system
+        data = np.array(point_cloud2.read_points_numpy(pc2, skip_nans=True))
+        frame = Frame(data, datetime.now())
+        # TODO the frame should get the original timestamp from the sensor not from system
         # pass the new frame to all interested PairCalibrators, which will perform
         # buffering and calculate a transformation if possible
         for pc in self.pair_calibrators[topic]:
@@ -72,10 +93,10 @@ class PairCalibrator:
     def __init__(self, node, topic1: str, topic2: str, trafo_publisher):
         self.node = node
         # Maximum age for a frame before it expires
-        self.expiry_duration = timedelta(seconds=1 / float(parameters.params["sample_rate_Hz"]) / 2)
+        self.expiry_duration = timedelta(seconds=1 / float(parameters.get_param("sample_rate_Hz")) / 2)
 
-        self.frame_buffer_1: deque[Frame] = deque(maxlen=int(parameters.params["window size"]))
-        self.frame_buffer_2: deque[Frame] = deque(maxlen=int(parameters.params["window size"]))
+        self.frame_buffer_1: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
+        self.frame_buffer_2: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
         self.topic1 = topic1
         self.topic2 = topic2
         self.last1: Frame | None = None
@@ -119,9 +140,9 @@ class PairCalibrator:
         centers = [f.cluster_centers for f in buffer]
         return find_marker_single_frame(
             centers,
-            max_distance=parameters.params["maximum neighbor distance"],
-            min_velocity=parameters.params["minimum velocity"],
-            max_vector_angle_rad=2 * np.pi * parameters.params["max. vector angle [deg]"] / 360,
+            max_distance=parameters.get_param("maximum neighbor distance"),
+            min_velocity=parameters.get_param("minimum velocity"),
+            max_vector_angle_rad=2 * np.pi * parameters.get_param("max. vector angle [deg]") / 360,
         )
 
     def new_frame_pair(self):
@@ -162,6 +183,7 @@ class PairCalibrator:
             min(rl1.weight, rl2.weight)
             for rl1, rl2 in zip(self.reflector_locations_1, self.reflector_locations_2)
         ])
+        self.new_transformation(calc_transformation_scipy(P, Q, weights))
 
     def new_transformation(self, trafo: Transformation):
         # TODO remove ROS-specific logic from this class for logic-CLI-ROS separation.
@@ -193,13 +215,7 @@ class PairCalibrator:
 
 def main(args=None):
     rclpy.init(args=args)
-
-    # TODO get parameter file path and sensor pairs from some config/parameters
-    parameters.init("/calib_src/default_params.json")
-    DEBUG_PAIRS = [("/rslidar_points_l", "/rslidar_points_r")]
-    pairs = DEBUG_PAIRS
-
-    calibrator = OnlineCalibrator(pairs)
+    calibrator = OnlineCalibrator()
     try:
         rclpy.spin(calibrator)
     except KeyboardInterrupt:

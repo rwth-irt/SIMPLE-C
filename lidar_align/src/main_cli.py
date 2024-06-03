@@ -19,7 +19,7 @@ from visualization.trafo_visualization import visualize_trafo
 def main():
     parser = argparse.ArgumentParser(description="Multi-Lidar alignment calibration")
     parser.add_argument("--rosbag", help="Mandatory, location of the rosbag file to process", required=True)
-    parser.add_argument("--param-file", help="Location of parameter JSON file, otherwise default will be used")
+    parser.add_argument("--param-file", help="Location of parameter YAML file, otherwise default will be used")
     parser.add_argument("--show-topics", action="store_true",
                         help="Print information about the topics found in the given rosbag file and exit.")
     parser.add_argument("--visualize-tracking",
@@ -53,8 +53,8 @@ def main():
             sys.exit(1)
         paramfile = args.param_file
     else:
-        paramfile = None  # use default
-    parameters.init(paramfile)
+        paramfile = (pathlib.Path(__file__).parent.parent / "default_parameters.yaml").absolute()  # use default
+    parameters.init_from_yaml(paramfile)
 
     # load data from file
     print(f"Processing rosbag file {pathlib.Path(args.rosbag).name}")
