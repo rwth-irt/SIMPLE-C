@@ -17,43 +17,42 @@ class PairCalibrator:
         # Maximum age for a frame before it expires
         self.expiry_duration = timedelta(seconds=1 / float(parameters.get_param("sample_rate_Hz")) / 2)
 
-        # TODO rename internal variables to _.....
-        self.frame_buffer_1: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
-        self.frame_buffer_2: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
-        self.topic1 = topic1
-        self.topic2 = topic2
-        self.last1: Frame | None = None
-        self.last2: Frame | None = None
+        self._frame_buffer_1: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
+        self._frame_buffer_2: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
+        self._topic1 = topic1
+        self._topic2 = topic2
+        self._last1: Frame | None = None
+        self._last2: Frame | None = None
         self.reflector_locations_1: list[ReflectorLocation] = []
         self.reflector_locations_2: list[ReflectorLocation] = []
         self.transformation: Transformation | None = None
-        self.trafo_callback = trafo_callback
+        self._trafo_callback = trafo_callback
 
     def new_frame(self, f: Frame):
         # store temporarily
-        if f.topic == self.topic1:
-            self.last1 = f
+        if f.topic == self._topic1:
+            self._last1 = f
         else:
-            assert f.topic == self.topic2
-            self.last2 = f
-        if self.last1 is None or self.last2 is None:
+            assert f.topic == self._topic2
+            self._last2 = f
+        if self._last1 is None or self._last2 is None:
             return
 
         # check if temporary frames are expired
-        if self.last1.timestamp - self.last2.timestamp > self.expiry_duration:
-            print(f"Frame for {self.topic2} expired.")
-            self.last2 = None
+        if self._last1.timestamp - self._last2.timestamp > self.expiry_duration:
+            print(f"Frame for {self._topic2} expired.")
+            self._last2 = None
             return
-        if self.last2.timestamp - self.last1.timestamp > self.expiry_duration:
-            print(f"Frame for {self.topic1} expired.")
-            self.last1 = None
+        if self._last2.timestamp - self._last1.timestamp > self.expiry_duration:
+            print(f"Frame for {self._topic1} expired.")
+            self._last1 = None
             return
 
         # if we have frames for both sensors which are not expired, add them to buffer and calculate transformation
-        self.frame_buffer_1.append(self.last1)
-        self.frame_buffer_2.append(self.last2)
-        self.last1 = None
-        self.last2 = None
+        self._frame_buffer_1.append(self._last1)
+        self._frame_buffer_2.append(self._last2)
+        self._last1 = None
+        self._last2 = None
 
         self.new_frame_pair()
 
@@ -70,8 +69,8 @@ class PairCalibrator:
     def new_frame_pair(self):
         print("new frame pair")
         # first call calculate_marker_location of latest frames
-        result1, status1 = PairCalibrator.calc_marker_location(self.frame_buffer_1)
-        result2, status2 = PairCalibrator.calc_marker_location(self.frame_buffer_2)
+        result1, status1 = PairCalibrator.calc_marker_location(self._frame_buffer_1)
+        result2, status2 = PairCalibrator.calc_marker_location(self._frame_buffer_2)
         # TODO do something with the status field...
 
         # TODO use some logging system, remove those debug prints
@@ -84,11 +83,11 @@ class PairCalibrator:
         print("reflector found in both frames")
         # Save the obtained reflector locations
         cluster1, index1 = result1
-        cluster1points = self.frame_buffer_1[-1].get_cluster_points(index1)
+        cluster1points = self._frame_buffer_1[-1].get_cluster_points(index1)
         self.reflector_locations_1.append(ReflectorLocation(cluster1, cluster1points))
 
         cluster2, index2 = result2
-        cluster2points = self.frame_buffer_2[-1].get_cluster_points(index2)
+        cluster2points = self._frame_buffer_2[-1].get_cluster_points(index2)
         self.reflector_locations_2.append(ReflectorLocation(cluster2, cluster2points))
 
         if len(self.reflector_locations_1) < 3:
@@ -106,5 +105,5 @@ class PairCalibrator:
             for rl1, rl2 in zip(self.reflector_locations_1, self.reflector_locations_2)
         ])
         self.transformation = calc_transformation_scipy(P, Q, weights)
-        if self.trafo_callback:
-            self.trafo_callback(self.transformation, self.topic1, self.topic2)
+        if self._trafo_callback:
+            self._trafo_callback(self.transformation, self._topic1, self._topic2)
