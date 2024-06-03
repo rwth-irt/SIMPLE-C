@@ -5,171 +5,130 @@ from pathlib import Path
 import numpy as np
 import open3d as o3d
 
+from shared.frame import Frame
+from shared.reflector_location import ReflectorLocation
+
 o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Info)
 
 # for snapshot creation
 snapshot_dir = None
 
-
 colors = {
-    -2: np.array([0.5, 0.5, 0.5]),  # irrelevant points             GRAY
-    -1: np.array([1.0, 0.0, 0.0]),  # bright points                 RED
-    1: np.array([0.0, 1.0, 0.0]),  # points in cluster              GREEN
-    2: np.array([0.0, 0.0, 1.0]),  # points in selected cluster     BLUE
+    "any": np.array([0.5, 0.5, 0.5]),  # GRAY
+    "bright": np.array([1.0, 0.0, 0.0]),  # RED
+    "cluster": np.array([0.0, 1.0, 0.0]),  # GREEN
+    "reflector": np.array([0.0, 0.0, 1.0]),  # BLUE
 }
 marker_color = [1, 0.706, 0]
 trace_color = [0.5, 0.706 / 2, 0]  # like marker, but darker
+marker_radius = 0.14
 
 
-def np_to_pointcloud_with_colors(frame_in):
-    """
-    Transforms a numpy frame with [ x y z c ] per point to a colored o3d pointloud.
-    c is the color index as specified in the `colors` dict above.
-    """
-    frame = frame_in[~(np.isnan(frame_in).any(axis=1))]  # remove nans from frame_in
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(frame[:, :3])
-    point_colors = np.zeros((len(frame), 3))  # irrelevant points black
-    for ci in colors:
-        point_colors[frame[:, 3] == ci] = colors[ci]
-    pcd.colors = o3d.utility.Vector3dVector(point_colors)
-    return pcd
+class FrameVisInfo:
+    def __init__(
+            self,
+            frame: Frame,
+            cluster_index_in_frame: int | None,
+            reflector_location: ReflectorLocation | None,
+    ):
+        self.frame = frame
+        self.cluster_index_in_frame = cluster_index_in_frame
+        self.reflector_location = reflector_location
+
+        # create o3d pointcloud object with colors
+        c = self.frame.clustering[:, 3]  # TODO set clustering to be only this column!
+        point_colors = np.full((len(self.frame.data), 3), colors["any"])
+        point_colors[c == -1] = colors["bright"]
+        point_colors[c >= 0] = colors["cluster"]
+        point_colors[c == self.cluster_index_in_frame] = colors["reflector"]
+
+        self.pcd = o3d.geometry.PointCloud()
+        self.pcd.points = o3d.utility.Vector3dVector(self.frame.data[:, :3])
+        self.pcd.colors = o3d.utility.Vector3dVector(point_colors)
+
+        # create markers: ball and long cylinder
+        if self.reflector_location:
+            self.marker1 = o3d.geometry.TriangleMesh.create_sphere(radius=marker_radius)
+            self.marker1.translate(self.reflector_location.cluster_mean[:3])
+            self.marker1.paint_uniform_color(marker_color)
+
+            self.marker2 = o3d.geometry.TriangleMesh.create_cylinder(
+                radius=marker_radius / 4,
+                height=marker_radius * 160
+            )
+            self.marker2.translate(self.reflector_location.cluster_mean[:3])
+            self.marker2.paint_uniform_color(marker_color)
+
+            self.trace_marker = o3d.geometry.TriangleMesh.create_sphere(radius=marker_radius * .5)
+            self.trace_marker.translate(self.reflector_location.cluster_mean[:3])
+            self.trace_marker.paint_uniform_color(trace_color)
+        else:
+            self.marker1 = None
+            self.marker2 = None
+            self.trace_marker = None
 
 
-def visualize_frame(frame_in):
-    # show a single frame
-    o3d.visualization.draw_geometries([np_to_pointcloud_with_colors(frame_in)])
+class TrackingVisualization:
+    def __init__(self, vis_infos: list[FrameVisInfo]):
+        self.vis_infos = vis_infos
+        self.i = -1
+        self.trace = []
+        self.last: FrameVisInfo | None = None
 
+        self.vis = o3d.visualization.VisualizerWithKeyCallback()
+        self.vis.create_window()
 
-def reset():
-    global _i, _last, _frames, _markers, _last_marker, _trace
-    _i = -1  # index of current frame to show
-    _last = None  # last frame's geometry, if exists
-    _frames = None  # list of all frame geometry objects
-    _markers = None  # list of marker centroids (one per frame, or None)
-    _last_marker = None
-    _trace = []
+        self.vis.poll_events()
+        self.vis.update_renderer()
+        self.vis.register_key_callback(ord("K"), lambda _: self.on_next_key())
+        self.vis.register_key_callback(ord("J"), lambda _: self.on_capture_key)
+        self.on_next_key()
 
+        print("showing open3d visualization, this will block the settings UI")
+        print("press escape to close 3d view, then enter new values")
+        print("PRESS K FOR THE NEXT FRAME! (Press J to save snapshot and proceed to next frame for creating videos.)")
 
-def _callback(vis):
-    """
-    Called by open3d on keypress. Switches to the next frame. Removes last frame's points and optionally markers
-    and addes new ones. Restores the 3d view to the state before swapping point clouds because open3d would usually
-    try to reset the view to the new data.
-    """
-    global _i, _last, _last_marker, _trace
-    first_time = not _last
-    vs = vis.get_view_status()  # cache current view to restore after changing objects
-    _i = (_i + 1) % len(_frames)
-    if _i == 0:
-        # clear old trace, restarting
-        for m in _trace:
-            vis.remove_geometry(m)
-        _trace = []
-    new = np_to_pointcloud_with_colors(_frames[_i])
-    vis.add_geometry(new, reset_bounding_box=True)
-    if _last:
-        vis.remove_geometry(_last)
-    _last = new
+        self.vis.run()
+        self.vis.destroy_window()
 
-    # add marker for this frame if needed
-    marker_radius = 0.14
-    if _last_marker:  # remove last marker in any case if present
-        vis.remove_geometry(_last_marker[0])
-        vis.remove_geometry(_last_marker[1])
-    if _markers and _markers[_i] is not None:
-        # marker: sphere and cylinder
-        marker = o3d.geometry.TriangleMesh.create_sphere(radius=marker_radius)
-        marker2 = o3d.geometry.TriangleMesh.create_cylinder(
-            radius=marker_radius / 4, height=marker_radius * 160
-        )
+    def on_next_key(self):
+        """
+        Called by open3d on keypress. Switches to the next frame. Removes last frame's points and optionally markers
+        and adds new ones. Restores the 3d view to the state before swapping point clouds because open3d would usually
+        try to reset the view to the new data.
+        """
+        vs = self.vis.get_view_status()  # cache current view to restore after changing objects
+        self.i = (self.i + 1) % len(self.vis_infos)
+        if self.i == 0:
+            # clear old trace, restarting
+            for m in self.trace:
+                self.vis.remove_geometry(m)
+            self.trace = []
 
-        marker.translate(_markers[_i][:3])
-        marker2.translate(_markers[_i][:3])
+        first_time = self.last is None
+        new = self.vis_infos[self.i]
+        self.vis.add_geometry(new.pcd, reset_bounding_box=first_time)
+        if new.marker1:
+            self.vis.add_geometry(new.marker1, reset_bounding_box=False)
+            self.vis.add_geometry(new.marker2, reset_bounding_box=False)
+            # trace
+            self.vis.add_geometry(new.trace_marker, reset_bounding_box=False)
+            self.trace.append(new.trace_marker)
 
-        marker.paint_uniform_color(marker_color)
-        marker2.paint_uniform_color(marker_color)
+        if self.last:
+            self.vis.remove_geometry(self.last.pcd)
+            self.vis.remove_geometry(self.last.marker1)
+            self.vis.remove_geometry(self.last.marker2)
+        self.last = new
 
-        vis.add_geometry(marker)
-        vis.add_geometry(marker2)
+        if not first_time:
+            self.vis.set_view_status(vs)
+        self.vis.update_renderer()
 
-        _last_marker = (marker, marker2)
-
-        # trace
-        trace_marker = o3d.geometry.TriangleMesh.create_sphere(radius=marker_radius / 2)
-        trace_marker.translate(_markers[_i][:3])
-        trace_marker.paint_uniform_color(trace_color)
-        vis.add_geometry(trace_marker)
-        _trace.append(trace_marker)
-
-    if not first_time:
-        vis.set_view_status(vs)
-    vis.update_renderer()
-    return True
-
-
-def visualize_tracking_animation(visualization, markers=None):
-    """
-    Open an open3d window to visualize the given visualization array and optionally
-    marker positions per frame. In the window, the key K can be pressed to proceed
-    to the next frame and J to save a snapshot and proceed.
-
-    :param visualization: Numpy array with rows being: [ x y z c ] with c being a color
-      index to specify the point's color. The colors will be mapped according to the `colors` dict at the top of
-      this function's file. Use `prepare_tracking_visualization` to create this array.
-    :param markers: None or a list of the same length as visualization. List entries can either be None or an 1d numpy
-      array [ x, y, z ] to use as marker position for the corresponding frame.
-    """
-    reset()
-    global _frames, _markers
-    assert (not markers) or len(visualization) == len(markers)
-
-    _frames = visualization
-    _markers = markers
-
-    vis = o3d.visualization.VisualizerWithKeyCallback()
-    vis.create_window()
-
-    vis.poll_events()
-    vis.update_renderer()
-    vis.register_key_callback(ord("K"), _callback)
-    vis.register_key_callback(ord("J"), on_capture_key)
-    _callback(vis)
-    print("PRESS K FOR THE NEXT FRAME! (Press J to save snapshot and proceed to next frame for creating videos.)")
-    vis.run()
-    vis.destroy_window()
-    reset()  # free RAM
-
-
-def on_capture_key(vis: o3d.visualization.VisualizerWithKeyCallback):
-    global snapshot_dir
-    _callback(vis)
-    if not snapshot_dir:
-        snapshot_dir = tempfile.mkdtemp(prefix="tracking_snapshots_")
-        print(f"WRITING SNAPSHOTS TO DIRECTORY {snapshot_dir}")
-    vis.capture_screen_image(str(Path(snapshot_dir) / f"frame_{str(_i).zfill(4)}.png"), do_render=True)
-
-
-def prepare_tracking_visualization(selection_indices, visualization):
-    """
-    Expects visualization to contain cluster indices in intensity channel of points,
-    as returned by `get_cluster_centers_per_frame`.
-
-    For given index of the selected cluster per frame (parameter `selection_indices`),
-    this function sets the respectively selected cluster's color index to 2 (for special highlighting)
-    and all others to 1. Other values are left untouched.
-
-    **Alters visualization**, which can then be passed to `visualize_tracking_animation`.
-
-    :param selection_indices: list with index of selected cluster per frame
-    :param visualization: lidar data numpy array, but with visualization info in intensity, as obtained \
-    from `get_cluster_centers_per_frame(create_visualization=True)`
-    :return: nothing, writes into visualization array
-    """
-    for frame_i in range(len(selection_indices)):
-        # currently, visualization contains indices of clusters
-        # for o3d visualization, we want to convert this to codes meaning "any cluster" or "chosen cluster"
-        chosen_cluster_selection = visualization[frame_i, :, 3] == selection_indices[frame_i]
-        any_cluster_selection = visualization[frame_i, :, 3] >= 0  # any cluster
-        visualization[frame_i, any_cluster_selection, 3] = 1
-        visualization[frame_i, chosen_cluster_selection, 3] = 2
+    def on_capture_key(self):
+        global snapshot_dir
+        self.on_next_key()
+        if not snapshot_dir:
+            snapshot_dir = tempfile.mkdtemp(prefix="tracking_snapshots_")
+            print(f"WRITING SNAPSHOTS TO DIRECTORY {snapshot_dir}")
+        self.vis.capture_screen_image(str(Path(snapshot_dir) / f"frame_{str(self.i).zfill(4)}.png"), do_render=True)

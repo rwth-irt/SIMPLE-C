@@ -67,7 +67,7 @@ class OnlineCalibrator(Node):
 
         # create pair calibrators
         for a, b in sensor_pairs:
-            pc = PairCalibrator(self, a, b, self.new_transformation)
+            pc = PairCalibrator(a, b, self.new_transformation)
             self.pair_calibrators[a].append(pc)
             self.pair_calibrators[b].append(pc)
 
@@ -75,7 +75,7 @@ class OnlineCalibrator(Node):
 
     def on_message(self, topic: str, pc2: point_cloud2):
         data = np.array(point_cloud2.read_points_numpy(pc2, skip_nans=True))
-        frame = Frame(data, datetime.now())
+        frame = Frame(data, datetime.now(), topic)
         # TODO the frame should get the original timestamp from the sensor not from system
         # pass the new frame to all interested PairCalibrators, which will perform
         # buffering and calculate a transformation if possible

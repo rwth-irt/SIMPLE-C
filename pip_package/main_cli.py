@@ -1,18 +1,17 @@
 import argparse
 import pathlib
 import sys
+from collections import deque
 
 import numpy as np
 
-from rosbag_import.rosbag_to_numpy import bag_to_numpy, write_to_numpy_file
-from rosbag_import.rosbag_utils import print_rosbag_info
+from rosbag_import import print_rosbag_info, get_frames_from_rosbag
 from shared import parameters
-from shared.locate_reflector.find_cluster_centers import get_cluster_centers_multiple_frames
-from shared.locate_reflector.track_marker import track_marker_multiple_frames
-from shared.transformation import filter_locations, calc_transformation_scipy, apply_transformation
+from shared.pair_calibrator import PairCalibrator
+from shared.reflector_location import ReflectorLocation
+from shared.transformation import apply_transformation
 from visualization.correlation_plot import plot_match_distances
-from visualization.tkinter_ui import create_gui
-from visualization.tracking_visualization import prepare_tracking_visualization, visualize_tracking_animation
+from visualization.tracking_visualization import FrameVisInfo, TrackingVisualization
 from visualization.trafo_visualization import visualize_trafo
 
 
@@ -24,10 +23,12 @@ def main():
                         help="Print information about the topics found in the given rosbag file and exit.")
     parser.add_argument("--visualize-tracking",
                         help="Specify a topic name for which marker tracking is visualized.")
-    parser.add_argument("--no-write-cache", action="store_true",
-                        help="Disable automatically writing a cache file after import from rosbag")
-    parser.add_argument("--no-read-cache", action="store_true",
-                        help="Disable trying to automatically read cache file if found")
+    # Caching is not available anymore after transition to Frame objects. If required, reimplement in rosbag_import.py.
+    # parser.add_argument("--no-write-cache", action="store_true",
+    #                     help="Disable automatically writing a cache file after import from rosbag")
+    # parser.add_argument("--no-read-cache", action="store_true",
+    #                     help="Disable trying to automatically read cache file if found")
+
     parser.add_argument("--transformation",
                         help="Pass a comma-separated pair of sensors/topic names to calculate a transformation for. "
                              "Example: --transformation 'topic1,topic2' "
@@ -46,150 +47,91 @@ def main():
         print_rosbag_info(args.rosbag)
         sys.exit()
 
-    # load parameters (first because loading data might take long)
+    if (args.visualize_tracking and args.transformation) or (not args.visualize_tracking and not args.transformation):
+        print("Please choose either '--visualize-tracking' or '--transformation'.")
+        sys.exit(1)
+
+    # load parameters (do this first because loading data might take long)
     if args.param_file:
         if not pathlib.Path(args.param_file).is_file():
             print("Could not find given parameter file! Omit option to use defaults. Aborting.")
             sys.exit(1)
         paramfile = args.param_file
     else:
-        paramfile = (pathlib.Path(__file__).parent.parent / "default_parameters.yaml").absolute()  # use default
+        paramfile = (
+                pathlib.Path(__file__).parent.parent / "ROS2_package" / "lidar_align" / "default_parameters.yaml"
+        ).absolute()  # use default params
     parameters.init_from_yaml(paramfile)
 
-    # load data from file
-    print(f"Processing rosbag file {pathlib.Path(args.rosbag).name}")
-    data = None
-    cache_filename = args.rosbag + "_cache.npz"
-    if not args.no_read_cache:
-        # try to load from cache
-        if pathlib.Path(cache_filename).is_file():
-            print("Found cache file, reading... ", end="")
-            data = np.load(cache_filename)
-            print("done")
-        else:
-            print("No cache file found")
-    if data is None:
-        # did not read from cache or no cache found
-        if not pathlib.Path(args.rosbag).is_file():
-            print("Given rosbag file does not exist, aborting.")
-            sys.exit(1)
-        data = bag_to_numpy(args.rosbag)
-        if not args.no_write_cache:
-            write_to_numpy_file(cache_filename, data)
-
+    # load data from rosbag
+    topics = None
     if args.visualize_tracking:
-        # visualize reflector tracking for given topic name
-        visualize_tracking(data[args.visualize_tracking], parameters.params)
-
+        topics = [args.visualize_tracking]
     if args.transformation:
-        # calculate transformation
-        trafo_topics = args.transformation.split(",")
-        if len(trafo_topics) != 2:
+        topics = list(map(str.strip, args.transformation.split(",")))
+        if len(topics) != 2:
             print("Must specify exactly two topics for transformation calculation. Aborting.")
             sys.exit(1)
+    assert topics is not None
 
-        marker_locations = {}
-        for topic in trafo_topics:
-            if topic not in data:
-                print(f"Topic '{topic}' not found in data!")
-                print_rosbag_info(args.rosbag)
-                print("Aborting due to invalid topic names.")
-                sys.exit(1)
-            print(f"Topic {topic}:")
-            print("  calculating cluster centers")
-            centers = get_cluster_centers_multiple_frames(
-                data[topic],
-                rel_intensity_threshold=parameters.get_param("relative intensity threshold"),
-                DBSCAN_epsilon=parameters.get_param("DBSCAN epsilon"),
-                DBSCAN_min_samples=int(parameters.get_param("DBSCAN min samples")),
-                create_visualization=False,
+    if not pathlib.Path(args.rosbag).is_file():
+        print("Given rosbag file does not exist, aborting.")
+        sys.exit(1)
+    print(f"Processing rosbag file {pathlib.Path(args.rosbag).name}")
+
+    frames = get_frames_from_rosbag(args.rosbag, topics)
+
+    if args.visualize_tracking:
+        visualize_tracking(frames)
+    if args.transformation:
+        transformation(frames, topics, args)
+
+
+def transformation(frames, topics, args):
+    pc = PairCalibrator(topics[0], topics[1], None)
+    print("Searching for reflector location in frames...")
+    for f in frames:
+        pc.new_frame(f)
+    print(f"Found {len(pc.reflector_locations_1)} point pairs.")
+    if not pc.transformation:
+        return
+    print("Transformation result:\nR=")
+    print(pc.transformation.R)
+    print("t =")
+    print(pc.transformation.t)
+    print("sensitivity matrix for rotation =")
+    print(pc.transformation.R_sensitivity)
+
+    # Visualizations based on transformed reflector locations
+    points1 = np.array([p.cluster_mean for p in pc.reflector_locations_1])
+    points2 = np.array([p.cluster_mean for p in pc.reflector_locations_2])
+    points1_transformed = apply_transformation(points1, pc.transformation)
+    if args.visualize_alignment:
+        plot_match_distances(points1_transformed, points2)
+    if args.visualize_trafo:
+        visualize_trafo([points1_transformed, points2], draw_point_match_markers=True)
+
+
+def visualize_tracking(frames):
+    buffer = deque(maxlen=int(parameters.get_param("window size")))
+    visualization_infos: list[FrameVisInfo] = []
+    for f in frames:
+        buffer.append(f)
+        result, status = PairCalibrator.calc_marker_location(buffer)
+        if result:
+            cluster_mean, cluster_index_in_frame = result
+            cluster_points = f.get_cluster_points(cluster_index_in_frame)
+            visualization_infos.append(
+                FrameVisInfo(
+                    f,
+                    cluster_index_in_frame,
+                    ReflectorLocation(cluster_mean, cluster_points)
+                )
             )
-            print("  tracking marker")
-            selected_locations, _ = track_marker_multiple_frames(
-                centers,
-                max_distance=parameters.get_param("maximum neighbor distance"),
-                min_velocity=parameters.get_param("minimum velocity"),
-                window_size=int(parameters.get_param("window size")),
-                max_vector_angle_rad=2 * np.pi * parameters.get_param("max. vector angle [deg]") / 360,
-            )
-            marker_locations[topic] = selected_locations
+        else:
+            visualization_infos.append(FrameVisInfo(f, None, None))
 
-        print("Searching for marker occurrences in both frames")
-        filtered = filter_locations(marker_locations, trafo_topics)
-
-        print(f"Calculating transformation using {len(filtered[trafo_topics[0]])} points")
-        trafo = calc_transformation_scipy(filtered[trafo_topics[0]], filtered[trafo_topics[1]])
-
-        print("Transformation result:\nR=")
-        print(trafo.R)
-        print("t =")
-        print(trafo.t)
-        print("sensitivity matrix for rotation =")
-        print(trafo.R_sensitivity)
-
-        if args.visualize_alignment:
-            # show verification plot with distances between matched points
-            plot_match_distances(
-                apply_transformation(filtered[trafo_topics[0]], trafo),
-                filtered[trafo_topics[1]]
-            )
-            visualize_trafo([
-                apply_transformation(filtered[trafo_topics[0]], trafo),
-                filtered[trafo_topics[1]]
-            ], draw_point_match_markers=True)
-
-        if args.visualize_trafo:
-            # transform point cloud from first frame for visualization
-            pts0 = data[trafo_topics[0]][0, ..., :3]
-            pts1 = data[trafo_topics[1]][0, ..., :3]
-            pts0tr = apply_transformation(pts0, trafo)
-            print("Opening open3d visualization of result...")
-            visualize_trafo([pts0tr, pts1])
-
-
-def visualize_tracking(frames, params_initial):
-    """
-    For a frames array of **a single sensor**, a tkinter param selection will be shown,
-    from which the open3d tracking visualization can be started.
-
-    Will call all clustering/tracking functions independently of the --transformation CLI argument.
-
-    :param frames: sensor data to use
-    :param params_initial: initial parameters to be loaded to UI
-    """
-
-    def visualize_tracking_with_params(_frames, params):
-        """
-        gets **frames for single sensor** and params, calls track_marker and opens open3d visualization.
-        Is called as callback from tkinter UI once the "calculate" button is pressed.
-        :param _frames: frames for single sensor/topic
-        :param params: parameter dict
-        """
-        centers, visualization = get_cluster_centers_multiple_frames(
-            _frames,
-            rel_intensity_threshold=params["relative intensity threshold"],
-            DBSCAN_epsilon=params["DBSCAN epsilon"],
-            DBSCAN_min_samples=int(params["DBSCAN min samples"]),
-            create_visualization=True
-        )
-        marker_pos, selection_indices = track_marker_multiple_frames(
-            centers,
-            max_distance=parameters.get_param("maximum neighbor distance"),
-            min_velocity=parameters.get_param("minimum velocity"),
-            window_size=int(parameters.get_param("window size")),
-            max_vector_angle_rad=2 * np.pi * parameters.get_param("max. vector angle [deg]") / 360,
-        )
-
-        prepare_tracking_visualization(selection_indices, visualization)
-        print("showing open3d visualization, this will block the settings UI")
-        print("press escape to close 3d view, then enter new values")
-        visualize_tracking_animation(visualization, marker_pos)
-        print("returning to settings UI")
-
-    create_gui(
-        params_initial,
-        callback=lambda params_from_gui: visualize_tracking_with_params(frames, params_from_gui),
-    )
+    TrackingVisualization(visualization_infos)
 
 
 if __name__ == "__main__":

@@ -13,11 +13,11 @@ from .transformation import Transformation, calc_transformation_scipy
 
 class PairCalibrator:
 
-    def __init__(self, node, topic1: str, topic2: str, trafo_callback: Callable[[Transformation, str, str], None]):
-        self.node = node
+    def __init__(self, topic1: str, topic2: str, trafo_callback: Callable[[Transformation, str, str], None] | None):
         # Maximum age for a frame before it expires
         self.expiry_duration = timedelta(seconds=1 / float(parameters.get_param("sample_rate_Hz")) / 2)
 
+        # TODO rename internal variables to _.....
         self.frame_buffer_1: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
         self.frame_buffer_2: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
         self.topic1 = topic1
@@ -29,24 +29,24 @@ class PairCalibrator:
         self.transformation: Transformation | None = None
         self.trafo_callback = trafo_callback
 
-    def new_frame(self, f: Frame, topic: str):
+    def new_frame(self, f: Frame):
         # store temporarily
-        if topic == self.topic1:
+        if f.topic == self.topic1:
             self.last1 = f
         else:
-            assert topic == self.topic2
+            assert f.topic == self.topic2
             self.last2 = f
         if self.last1 is None or self.last2 is None:
             return
 
         # check if temporary frames are expired
         if self.last1.timestamp - self.last2.timestamp > self.expiry_duration:
-            print(f"Frame for {self.topic1} expired.")
-            self.last1 = None
-            return
-        if self.last2.timestamp - self.last1.timestamp > self.expiry_duration:
             print(f"Frame for {self.topic2} expired.")
             self.last2 = None
+            return
+        if self.last2.timestamp - self.last1.timestamp > self.expiry_duration:
+            print(f"Frame for {self.topic1} expired.")
+            self.last1 = None
             return
 
         # if we have frames for both sensors which are not expired, add them to buffer and calculate transformation
@@ -105,5 +105,6 @@ class PairCalibrator:
             min(rl1.weight, rl2.weight)
             for rl1, rl2 in zip(self.reflector_locations_1, self.reflector_locations_2)
         ])
-        transformation = calc_transformation_scipy(P, Q, weights)
-        self.trafo_callback(transformation, self.topic1, self.topic2)
+        self.transformation = calc_transformation_scipy(P, Q, weights)
+        if self.trafo_callback:
+            self.trafo_callback(self.transformation, self.topic1, self.topic2)
