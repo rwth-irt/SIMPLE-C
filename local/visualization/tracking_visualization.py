@@ -5,8 +5,8 @@ from pathlib import Path
 import numpy as np
 import open3d as o3d
 
-from shared.frame import Frame
-from shared.reflector_location import ReflectorLocation
+from core.frame import Frame
+from core.reflector_location import ReflectorLocation
 
 o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Info)
 
