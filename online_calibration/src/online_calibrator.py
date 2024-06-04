@@ -6,10 +6,10 @@ from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from rclpy.node import Node
 from sensor_msgs_py import point_cloud2
 
-from shared import parameters
-from shared.frame import Frame
-from shared.pair_calibrator import PairCalibrator
-from shared.transformation import Transformation
+from core import parameters
+from core.frame import Frame
+from core.pair_calibrator import PairCalibrator
+from core.transformation import Transformation
 
 
 class OnlineCalibrator(Node):

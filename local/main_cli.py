@@ -6,10 +6,10 @@ from collections import deque
 import numpy as np
 
 from rosbag_import import print_rosbag_info, get_frames_from_rosbag
-from shared import parameters
-from shared.pair_calibrator import PairCalibrator
-from shared.reflector_location import ReflectorLocation
-from shared.transformation import apply_transformation
+from core import parameters
+from core.pair_calibrator import PairCalibrator
+from core.reflector_location import ReflectorLocation
+from core.transformation import apply_transformation
 from visualization.correlation_plot import plot_match_distances
 from visualization.tracking_visualization import FrameVisInfo, TrackingVisualization
 from visualization.trafo_visualization import visualize_trafo
@@ -59,7 +59,7 @@ def main():
         paramfile = args.param_file
     else:
         paramfile = (
-                pathlib.Path(__file__).parent.parent / "ROS2_package" / "lidar_align" / "default_parameters.yaml"
+                pathlib.Path(__file__).parent.parent / "online_calibration" / "default_parameters.yaml"
         ).absolute()  # use default params
     parameters.init_from_yaml(paramfile)
 

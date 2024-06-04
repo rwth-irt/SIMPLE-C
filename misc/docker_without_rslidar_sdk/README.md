@@ -11,7 +11,7 @@ to live sensor data for debugging purposes. Pre-recorded data can be replayed us
 
 2.  *In the container*, navigate to `cd /calib_src/ros_workspace`.
 
-3.  *Optional:* Run `rosdep` using `rosdep check --from-path lidar_align/ --rosdistro iron`.
+3.  *Optional:* Run `rosdep` using `rosdep check --from-path online_calibration/ --rosdistro iron`.
 
 4.  Run `colcon build` to build the ROS2 package.
     (This installs *all* packages found in the current workspace.)
@@ -20,7 +20,7 @@ to live sensor data for debugging purposes. Pre-recorded data can be replayed us
 
 5.  Source the new ROS2 Package: `source install/setup.bash`
 
-6.  Run the calibration node: `ros2 run lidar_align main`
+6.  Run the calibration node: `ros2 run online_calibration main`
 
 7.  To play back data, you need a Rosbag file in a format compatible with ROS2.
     (See below on how to convert ROS1-Rosbags to the correct format.)
@@ -31,8 +31,8 @@ to live sensor data for debugging purposes. Pre-recorded data can be replayed us
     - Then play the rosbag data using `ros2 bag play /DATA/<NAME_OF_ROSBAG>`.
 
 8.  If you update your code on the host:
-    - ~~If you used `--symlink-install` (see above), simply rerun `ros2 run lidar_align main`.~~
-    - Without `--symlink-install`, you have to rebuild: `colcon build && source install/setup.bash && ros2 run lidar_align main`
+    - ~~If you used `--symlink-install` (see above), simply rerun `ros2 run online_calibration main`.~~
+    - Without `--symlink-install`, you have to rebuild: `colcon build && source install/setup.bash && ros2 run online_calibration main`
 
 
 ## Converting Rosbags from ROS1 to ROS2
