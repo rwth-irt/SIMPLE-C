@@ -1,5 +1,3 @@
-from typing import Union, List, Tuple
-
 import numpy as np
 
 
@@ -13,7 +11,7 @@ def get_nearest_neighbor(origin, candidates):
 
 # TODO note somewhere that "center" and "cluster" is treated as synonym in most docstrings!
 
-def get_nearest_neighbor_trace(clusters: List[np.ndarray], start_i) -> np.ndarray:
+def get_nearest_neighbor_trace(clusters: list[np.ndarray], start_i) -> np.ndarray:
     """
     Get the trace of nearest neighbors, going **backwards** from the "start cluster" `clusters[-1][start_i]`.
     The start cluster is contained in the returned trace.
@@ -40,7 +38,7 @@ def get_nearest_neighbor_trace(clusters: List[np.ndarray], start_i) -> np.ndarra
 
 
 def find_marker_single_frame(clusters, max_distance, min_velocity, max_vector_angle_rad) \
-        -> Tuple[Union[None, Tuple[np.ndarray, int]], str]:
+        -> tuple[None | tuple[np.ndarray, int], str]:
     """
     Decide which cluster center in the **last** frame of `clusters` is most likely the reflector.
     The decision is **not** based on previous decisions!
@@ -123,7 +121,7 @@ def find_marker_single_frame(clusters, max_distance, min_velocity, max_vector_an
 
 def track_marker_multiple_frames(
         clusters, max_distance, min_velocity, window_size, max_vector_angle_rad
-) -> Tuple[List[np.ndarray], List[int]]:
+) -> tuple[list[np.ndarray], list[int]]:
     """
     Applies :func:`find_marker_single_frame` successively for multiple frames.
     Therefore, tracks the reflector in the data of a single sensor.
