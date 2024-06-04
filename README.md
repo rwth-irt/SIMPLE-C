@@ -9,7 +9,7 @@ sourced (this is all ensured when using the docker image built from the definiti
 [docker repository](https://git-ce.rwth-aachen.de/g-nav-mob-irt/projects/galileonautic2plus/calibration/robosense_docker),
 run the following command:
 
-`ros2 run lidar_align main --ros-args --params-file /PATH/TO/parameters.yaml -p sensor_pairs:="<PAIRS>"`
+`ros2 run online_calibration main --ros-args --params-file /PATH/TO/parameters.yaml -p sensor_pairs:="<PAIRS>"`
 
 The `/PATH/TO/parameters.yaml` must be the path **inside** the docker container!
 Make sure that the parameter file is somehow accessible inside the docker container for ROS to read it.

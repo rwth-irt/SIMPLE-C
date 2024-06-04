@@ -59,7 +59,7 @@ def main():
         paramfile = args.param_file
     else:
         paramfile = (
-                pathlib.Path(__file__).parent.parent / "ROS2_package" / "lidar_align" / "default_parameters.yaml"
+                pathlib.Path(__file__).parent.parent / "online_calibration" / "default_parameters.yaml"
         ).absolute()  # use default params
     parameters.init_from_yaml(paramfile)
 
