@@ -3,11 +3,38 @@ from geometry_msgs.msg import TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from rclpy.node import Node
 from sensor_msgs_py import point_cloud2
+from sensor_msgs_py.numpy_compat import structured_to_unstructured
 
 from .core import parameters
 from .core.frame import Frame
 from .core.pair_calibrator import PairCalibrator
 from .core.transformation import Transformation
+
+
+def get_numpy_from_pc2(pc2: point_cloud2.PointCloud2, field_names: list[str]):
+    """
+    Docs for sensor_msgs_py.point_cloud2 can be found here:
+    https://docs.ros.org/en/ros2_packages/rolling/api/sensor_msgs_py/sensor_msgs_py.point_cloud2.html
+    (page is empty for humble..........). However, the documentation is not sufficient to fully understand
+    all behaviour. Therefore, the source code of sensor_msgs_py.point_cloud2 can be found here:
+    https://github.com/ros2/common_interfaces/blob/rolling/sensor_msgs_py/sensor_msgs_py/point_cloud2.py
+
+    In the source code of sensor_msgs_py.point_cloud2.read_points_numpy we can see that the assertion for
+    equal types of all fields is performed for all fields of the objects, not only for the ones actually
+    selected using the field_names parameter. The assertion therefore fails even if all selected fields do
+    have the same type.
+
+    This function resembles the functionality of read_points_numpy, only without the type assertion.
+    If the behaviour of read_points_numpy is eventually corrected, this function can be replaced by a simple
+    call to read_points_numpy.
+    """
+    data_structured = point_cloud2.read_points(
+        pc2,
+        field_names=field_names,
+        skip_nans=True
+    )
+    data = structured_to_unstructured(data_structured)
+    return data
 
 
 class OnlineCalibrator(Node):
@@ -72,7 +99,13 @@ class OnlineCalibrator(Node):
         print("Waiting for sensor data...")
 
     def on_message(self, topic: str, pc2: point_cloud2.PointCloud2):
-        data = np.array(point_cloud2.read_points_numpy(pc2, skip_nans=True))
+        data = get_numpy_from_pc2(pc2, ["x", "y", "z", "intensity"])
+
+        # As timestamp, we use the one from the ROS message, as it is easy to obtain.
+        # The single points of the point cloud (if the SDK is set to the correct point format)
+        # also contain a timestamp (for each point!). However, the timestamp of the **last** point
+        # is only microseconds off from the one of the ROS message. So using the ones from the
+        # actual sensor measurements brings no benefit here.
         timestamp_ros = pc2.header.stamp
         t_sec = timestamp_ros.sec + timestamp_ros.nanosec * 1.e-9
 
