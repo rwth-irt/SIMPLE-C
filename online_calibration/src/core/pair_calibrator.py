@@ -1,5 +1,4 @@
 from collections import deque
-from datetime import timedelta
 from typing import Callable
 
 import numpy as np
@@ -15,8 +14,7 @@ class PairCalibrator:
 
     def __init__(self, topic1: str, topic2: str, trafo_callback: Callable[[Transformation, str, str], None] | None):
         # Maximum age for a frame before it expires
-        self.expiry_duration = timedelta(seconds=1 / float(parameters.get_param("sample_rate_Hz")) / 2)
-
+        self._expiry_duration_sec = 1.0 / float(parameters.get_param("sample_rate_Hz")) / 2
         self._frame_buffer_1: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
         self._frame_buffer_2: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
         self._topic1 = topic1
@@ -39,11 +37,11 @@ class PairCalibrator:
             return
 
         # check if temporary frames are expired
-        if self._last1.timestamp - self._last2.timestamp > self.expiry_duration:
+        if self._last1.timestamp_sec - self._last2.timestamp_sec > self._expiry_duration_sec:
             print(f"Frame for {self._topic2} expired.")
             self._last2 = None
             return
-        if self._last2.timestamp - self._last1.timestamp > self.expiry_duration:
+        if self._last2.timestamp_sec - self._last1.timestamp_sec > self._expiry_duration_sec:
             print(f"Frame for {self._topic1} expired.")
             self._last1 = None
             return
@@ -67,20 +65,20 @@ class PairCalibrator:
         )
 
     def new_frame_pair(self):
-        print("new frame pair")
+        print("New frame pair")
         # first call calculate_marker_location of latest frames
         result1, status1 = PairCalibrator.calc_marker_location(self._frame_buffer_1)
         result2, status2 = PairCalibrator.calc_marker_location(self._frame_buffer_2)
         # TODO do something with the status field...
 
         # TODO use some logging system, remove those debug prints
-        print(f"{' ' * 20} status1: {str(status1).ljust(20)} status2: {str(status2).ljust(20)}")
+        # print(f"{' ' * 20} status1: {str(status1).ljust(20)} status2: {str(status2).ljust(20)}")
 
         if result1 is None or result2 is None:
             # Only continue if reflector is found in both new frames
             return
 
-        print("reflector found in both frames")
+        print("Reflector found in both frames")
         # Save the obtained reflector locations
         cluster1, index1 = result1
         cluster1points = self._frame_buffer_1[-1].get_cluster_points(index1)
@@ -92,10 +90,10 @@ class PairCalibrator:
 
         if len(self.reflector_locations_1) < 3:
             # we need at least 3 point pairs
-            print("not enough point pairs yet")
+            print("Not enough point pairs yet")
             return
 
-        print("calculating new transformation")
+        print(f"Calculating new transformation (using {str(len(self.reflector_locations_1)).rjust(3)} points)")
         # Recalculate and publish transformation with new data
         P = np.array([rl.cluster_mean[:3] for rl in self.reflector_locations_1])
         Q = np.array([rl.cluster_mean[:3] for rl in self.reflector_locations_2])

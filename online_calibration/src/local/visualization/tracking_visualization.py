@@ -5,8 +5,8 @@ from pathlib import Path
 import numpy as np
 import open3d as o3d
 
-from core.frame import Frame
-from core.reflector_location import ReflectorLocation
+from ...core.frame import Frame
+from ...core.reflector_location import ReflectorLocation
 
 o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Info)
 
@@ -36,7 +36,7 @@ class FrameVisInfo:
         self.reflector_location = reflector_location
 
         # create o3d pointcloud object with colors
-        c = self.frame.clustering[:, 3]  # TODO set clustering to be only this column!
+        c = self.frame.clustering
         point_colors = np.full((len(self.frame.data), 3), colors["any"])
         point_colors[c == -1] = colors["bright"]
         point_colors[c >= 0] = colors["cluster"]

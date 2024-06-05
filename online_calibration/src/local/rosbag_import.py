@@ -2,13 +2,12 @@
 # maybe also installing roslz4 (from same pip repo) fixes the insanely bad performance?
 # installing via `conda install -c conda-forge ros-rosbag` might work as well
 import sys
-from datetime import datetime, timedelta
 
 import numpy as np
 import rosbag
 from sensor_msgs import point_cloud2
 
-from core.frame import Frame
+from ..core.frame import Frame
 
 
 def get_frames_from_rosbag(rosbag_filename: str, topics: list[str]) -> list[Frame]:
@@ -36,9 +35,6 @@ def get_frames_from_rosbag(rosbag_filename: str, topics: list[str]) -> list[Fram
 
         frames = []
 
-        # we'll take the difference of timestamps afterwards, value does not matter
-        base_time = datetime(year=1970, month=1, day=1)
-
         print("starting import")
         for i, (topic, message, timestamp_ros) in enumerate(bag.read_messages(topics=topics)):
             # print progress
@@ -49,8 +45,8 @@ def get_frames_from_rosbag(rosbag_filename: str, topics: list[str]) -> list[Fram
 
             # Get data
             msg_data = np.array(point_cloud2.read_points_list(message, skip_nans=False))
-            timestamp = base_time + timedelta(seconds=timestamp_ros.secs, microseconds=timestamp_ros.nsecs / 1000)
-            frames.append(Frame(msg_data, timestamp, topic))
+            t_sec = timestamp_ros.secs + timestamp_ros.nsecs * 1.e-9
+            frames.append(Frame(msg_data, t_sec, topic))
 
             # TODO:
             #  docstring says "For more efficient access use read_points directly.". Is this the performance problem?

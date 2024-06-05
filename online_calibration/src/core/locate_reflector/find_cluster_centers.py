@@ -22,8 +22,7 @@ def get_cluster_centers_single_frame(
 
     A numpy array is then returned which consists of those values per point.
 
-    In addition, a copy of `frame` is returned, in which the 4th entry of each point (the former "intensity" channel)
-    holding the following values:
+    In addition, a one-dimensional array ("clustering") is returned holding one the following value for each point:
     - If the point is assigned to a cluster, the index of that cluster.
     - If the point's intensity is below the intensity threshold: -2
     - If the point's intensity is above the intensity threshold: -1
@@ -37,15 +36,14 @@ def get_cluster_centers_single_frame(
         - A tuple `(cluster_means, clustering)`, where
         - cluster_means is a numpy array with one column per cluster containing [ x y z intensity #points ]
           (mean values!). If no clusters are found, an empty numpy array is returned.
-        - clustering is a copy of `frame`, where the intensity data (`frame[..., 3]` is replaced with the
-          cluster index of the respective point or -1 if the point is in no cluster.
+        - clustering is a 1d array, for values see above.
     """
-    clustering = frame.copy()
-    clustering[:, 3] = -2
+    clustering = np.zeros(len(frame))
+    clustering[:] = -2
 
     intensity_threshold = np.max(frame[:, 3]) * rel_intensity_threshold
     point_selection = frame[:, 3] >= intensity_threshold
-    clustering[point_selection, 3] = -1
+    clustering[point_selection] = -1
     bright = frame[point_selection]
     if len(bright) == 0:
         # no bright points in this frame
@@ -72,7 +70,7 @@ def get_cluster_centers_single_frame(
         # 2. from these, select the ones which belong to this cluster
         in_cluster_indices = in_frame_indices[clusterlabels == clusterlabel]
         # 3. we can use these indices now in the original `frame` array containing *all* points
-        clustering[in_cluster_indices, 3] = clusterlabel
+        clustering[in_cluster_indices] = clusterlabel
 
     return np.array(centers), clustering
 

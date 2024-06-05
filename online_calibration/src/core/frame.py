@@ -1,5 +1,3 @@
-from datetime import datetime
-
 import numpy as np
 
 from . import parameters
@@ -7,11 +5,14 @@ from .locate_reflector.find_cluster_centers import get_cluster_centers_single_fr
 
 
 # TODO document, especially shape and content of numpy arrays!
+# currently, the documentation of the cluster_centers and clustering arrays
+# can be found in the docs of find_cluster_centers.get_cluster_centers_single_frame
+
 class Frame:
-    def __init__(self, data: np.ndarray, timestamp: datetime, topic: str):
+    def __init__(self, data: np.ndarray, timestamp_sec: float, topic: str):
         self.topic = topic
         self.data = data
-        self.timestamp = timestamp
+        self.timestamp_sec = timestamp_sec
         self._cluster_centers = None
         self._clustering = None
 
@@ -38,5 +39,5 @@ class Frame:
         )
 
     def get_cluster_points(self, index: int):
-        return self.clustering[self.clustering[:, 3] == index].copy()
+        return self.clustering[self.clustering == index].copy()
         # call copy() to decouple from big frame array to allow for garbage collection
