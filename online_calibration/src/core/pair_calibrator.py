@@ -1,5 +1,4 @@
 from collections import deque
-from datetime import timedelta
 from typing import Callable
 
 import numpy as np
@@ -15,8 +14,7 @@ class PairCalibrator:
 
     def __init__(self, topic1: str, topic2: str, trafo_callback: Callable[[Transformation, str, str], None] | None):
         # Maximum age for a frame before it expires
-        self.expiry_duration = timedelta(seconds=1 / float(parameters.get_param("sample_rate_Hz")) / 2)
-
+        self._expiry_duration_sec = 1.0 / float(parameters.get_param("sample_rate_Hz")) / 2
         self._frame_buffer_1: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
         self._frame_buffer_2: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
         self._topic1 = topic1
@@ -39,11 +37,11 @@ class PairCalibrator:
             return
 
         # check if temporary frames are expired
-        if self._last1.timestamp - self._last2.timestamp > self.expiry_duration:
+        if self._last1.timestamp_sec - self._last2.timestamp_sec > self._expiry_duration_sec:
             print(f"Frame for {self._topic2} expired.")
             self._last2 = None
             return
-        if self._last2.timestamp - self._last1.timestamp > self.expiry_duration:
+        if self._last2.timestamp_sec - self._last1.timestamp_sec > self._expiry_duration_sec:
             print(f"Frame for {self._topic1} expired.")
             self._last1 = None
             return

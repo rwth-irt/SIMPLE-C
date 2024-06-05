@@ -1,5 +1,3 @@
-from datetime import datetime
-
 import numpy as np
 from geometry_msgs.msg import TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
@@ -73,10 +71,12 @@ class OnlineCalibrator(Node):
 
         print("Waiting for sensor data...")
 
-    def on_message(self, topic: str, pc2: point_cloud2):
+    def on_message(self, topic: str, pc2: point_cloud2.PointCloud2):
         data = np.array(point_cloud2.read_points_numpy(pc2, skip_nans=True))
-        frame = Frame(data, datetime.now(), topic)
-        # TODO the frame should get the original timestamp from the sensor not from system
+        timestamp_ros = pc2.header.stamp
+        t_sec = timestamp_ros.sec + timestamp_ros.nanosec * 1.e-9
+
+        frame = Frame(data, t_sec, topic)
         # pass the new frame to all interested PairCalibrators, which will perform
         # buffering and calculate a transformation if possible
         for pc in self.pair_calibrators[topic]:
