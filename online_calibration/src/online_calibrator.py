@@ -80,7 +80,7 @@ class OnlineCalibrator(Node):
         # pass the new frame to all interested PairCalibrators, which will perform
         # buffering and calculate a transformation if possible
         for pc in self.pair_calibrators[topic]:
-            pc.new_frame(frame, topic)
+            pc.new_frame(frame)
 
     def new_transformation(self, trafo: Transformation, P_topic: str, Q_topic: str):
         """
@@ -92,9 +92,6 @@ class OnlineCalibrator(Node):
         :param Q_topic: the name of the "Q" frame (see `transformation.py` for explanation)
         :return:
         """
-        assert isinstance(self, OnlineCalibrator)
-        # TODO if this fails, the self-binding probably didn't work when passing the instance method as a callback
-
         print(f"New transformation for '{P_topic}' --> '{Q_topic}':\nR=")
         print(trafo.R)
         print("t =")
@@ -104,7 +101,7 @@ class OnlineCalibrator(Node):
 
         # Adapted from http://docs.ros.org/en/humble/Tutorials/Intermediate/Tf2/Writing-A-Tf2-Broadcaster-Py.html
         t = TransformStamped()
-        t.header.stamp = self.node.get_clock().now().to_msg()
+        t.header.stamp = self.get_clock().now().to_msg()
         # Trafo is chosen such that it transforms P (frame1) to Q (frame2)
         t.header.frame_id = Q_topic
         t.child_frame_id = P_topic
