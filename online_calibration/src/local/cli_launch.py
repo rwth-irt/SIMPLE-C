@@ -5,14 +5,14 @@ from collections import deque
 
 import numpy as np
 
-from rosbag_import import print_rosbag_info, get_frames_from_rosbag
-from core import parameters
-from core.pair_calibrator import PairCalibrator
-from core.reflector_location import ReflectorLocation
-from core.transformation import apply_transformation
-from visualization.correlation_plot import plot_match_distances
-from visualization.tracking_visualization import FrameVisInfo, TrackingVisualization
-from visualization.trafo_visualization import visualize_trafo
+from .rosbag_import import print_rosbag_info, get_frames_from_rosbag
+from .visualization.correlation_plot import plot_match_distances
+from .visualization.tracking_visualization import FrameVisInfo, TrackingVisualization
+from .visualization.trafo_visualization import visualize_trafo
+from ..core import parameters
+from ..core.pair_calibrator import PairCalibrator
+from ..core.reflector_location import ReflectorLocation
+from ..core.transformation import apply_transformation
 
 
 def main():
@@ -59,7 +59,7 @@ def main():
         paramfile = args.param_file
     else:
         paramfile = (
-                pathlib.Path(__file__).parent.parent / "online_calibration" / "default_parameters.yaml"
+                pathlib.Path(__file__).parent.parent.parent / "default_parameters.yaml"
         ).absolute()  # use default params
     parameters.init_from_yaml(paramfile)
 
@@ -132,7 +132,3 @@ def visualize_tracking(frames):
             visualization_infos.append(FrameVisInfo(f, None, None))
 
     TrackingVisualization(visualization_infos)
-
-
-if __name__ == "__main__":
-    main()

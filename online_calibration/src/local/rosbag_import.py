@@ -8,7 +8,7 @@ import numpy as np
 import rosbag
 from sensor_msgs import point_cloud2
 
-from core.frame import Frame
+from ..core.frame import Frame
 
 
 def get_frames_from_rosbag(rosbag_filename: str, topics: list[str]) -> list[Frame]:
