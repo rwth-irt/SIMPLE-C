@@ -99,6 +99,7 @@ class TrackingVisualization:
         """
         vs = self.vis.get_view_status()  # cache current view to restore after changing objects
         self.i = (self.i + 1) % len(self.vis_infos)
+        print(f"Showing frame {str(self.i + 1).rjust(3)} / {len(self.vis_infos)}")
         if self.i == 0:
             # clear old trace, restarting
             for m in self.trace:
