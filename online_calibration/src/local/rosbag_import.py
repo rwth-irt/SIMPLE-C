@@ -39,12 +39,16 @@ def get_frames_from_rosbag(rosbag_filename: str, topics: list[str]) -> list[Fram
         for i, (topic, message, timestamp_ros) in enumerate(bag.read_messages(topics=topics)):
             # print progress
             sys.stdout.write(
-                "\r" + f"reading msg {str(i).rjust(3, ' ')} / {total_message_count}".rjust(30, " ")
+                "\r" + f"reading msg {str(i + 1).rjust(3, ' ')} / {total_message_count}".rjust(30, " ")
             )
             sys.stdout.flush()
 
             # Get data
-            msg_data = np.array(point_cloud2.read_points_list(message, skip_nans=False))
+            msg_data = np.array(point_cloud2.read_points_list(
+                message,
+                skip_nans=True,
+                field_names=["x", "y", "z", "intensity"]
+            ))
             t_sec = timestamp_ros.secs + timestamp_ros.nsecs * 1.e-9
             frames.append(Frame(msg_data, t_sec, topic))
 
