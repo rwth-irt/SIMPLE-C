@@ -28,11 +28,9 @@ class FrameVisInfo:
     def __init__(
             self,
             frame: Frame,
-            cluster_index_in_frame: int | None,
             reflector_location: ReflectorLocation | None,
     ):
         self.frame = frame
-        self.cluster_index_in_frame = cluster_index_in_frame
         self.reflector_location = reflector_location
 
         # create o3d pointcloud object with colors
@@ -40,7 +38,7 @@ class FrameVisInfo:
         point_colors = np.full((len(self.frame.data), 3), colors["any"])
         point_colors[c == -1] = colors["bright"]
         point_colors[c >= 0] = colors["cluster"]
-        point_colors[c == self.cluster_index_in_frame] = colors["reflector"]
+        point_colors[c == self.reflector_location.cluster_index_in_frame] = colors["reflector"]
 
         self.pcd = o3d.geometry.PointCloud()
         self.pcd.points = o3d.utility.Vector3dVector(self.frame.data[:, :3])
@@ -49,18 +47,18 @@ class FrameVisInfo:
         # create markers: ball and long cylinder
         if self.reflector_location:
             self.marker1 = o3d.geometry.TriangleMesh.create_sphere(radius=marker_radius)
-            self.marker1.translate(self.reflector_location.cluster_mean[:3])
+            self.marker1.translate(self.reflector_location.centroid)
             self.marker1.paint_uniform_color(marker_color)
 
             self.marker2 = o3d.geometry.TriangleMesh.create_cylinder(
                 radius=marker_radius / 4,
                 height=marker_radius * 160
             )
-            self.marker2.translate(self.reflector_location.cluster_mean[:3])
+            self.marker2.translate(self.reflector_location.centroid)
             self.marker2.paint_uniform_color(marker_color)
 
             self.trace_marker = o3d.geometry.TriangleMesh.create_sphere(radius=marker_radius * .5)
-            self.trace_marker.translate(self.reflector_location.cluster_mean[:3])
+            self.trace_marker.translate(self.reflector_location.centroid)
             self.trace_marker.paint_uniform_color(trace_color)
         else:
             self.marker1 = None

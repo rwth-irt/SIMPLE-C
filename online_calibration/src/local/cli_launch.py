@@ -11,7 +11,6 @@ from .visualization.tracking_visualization import FrameVisInfo, TrackingVisualiz
 from .visualization.trafo_visualization import visualize_trafo
 from ..core import parameters
 from ..core.pair_calibrator import PairCalibrator
-from ..core.reflector_location import ReflectorLocation
 from ..core.transformation import apply_transformation
 
 
@@ -103,8 +102,8 @@ def transformation(frames, topics, args):
     print(pc.transformation.R_sensitivity)
 
     # Visualizations based on transformed reflector locations
-    points1 = np.array([p.cluster_mean for p in pc.reflector_locations_1])
-    points2 = np.array([p.cluster_mean for p in pc.reflector_locations_2])
+    points1 = np.array([p.centroid for p in pc.reflector_locations_1])
+    points2 = np.array([p.centroid for p in pc.reflector_locations_2])
     points1_transformed = apply_transformation(points1, pc.transformation)
     if args.visualize_alignment:
         plot_match_distances(points1_transformed, points2)
@@ -117,18 +116,10 @@ def visualize_tracking(frames):
     visualization_infos: list[FrameVisInfo] = []
     for f in frames:
         buffer.append(f)
-        result, status = PairCalibrator.calc_marker_location(buffer)
-        if result:
-            cluster_mean, cluster_index_in_frame = result
-            cluster_points = f.get_cluster_points(cluster_index_in_frame)
-            visualization_infos.append(
-                FrameVisInfo(
-                    f,
-                    cluster_index_in_frame,
-                    ReflectorLocation(cluster_mean, cluster_points)
-                )
-            )
+        reflector_location, status = PairCalibrator.calc_marker_location(buffer)
+        if reflector_location:
+            visualization_infos.append(FrameVisInfo(f, reflector_location))
         else:
-            visualization_infos.append(FrameVisInfo(f, None, None))
+            visualization_infos.append(FrameVisInfo(f, None))
 
     TrackingVisualization(visualization_infos)

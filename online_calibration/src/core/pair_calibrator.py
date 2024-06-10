@@ -55,38 +55,46 @@ class PairCalibrator:
         self.new_frame_pair()
 
     @staticmethod
-    def calc_marker_location(buffer: deque[Frame]):
+    def calc_marker_location(buffer: deque[Frame]) -> tuple[ReflectorLocation | None, str]:
+        """
+        Obtain a ReflectorLocation (if found) object from a time series of Frame objects.
+        Wraps track_marker.find_marker_single_frame and constructs ReflectorLocation objects.
+
+        :param buffer: a time series of Frame objects
+        :return: Tuple (result, status) where result is a ReflectorLocation or None, depending whether the reflector
+            was found in the given Frame objects. Status is the status obtained by find_marker_single_frame.
+        """
         centers = [f.cluster_centers for f in buffer]
-        return find_marker_single_frame(
+        result, status = find_marker_single_frame(
             centers,
             max_distance=parameters.get_param("maximum neighbor distance"),
             min_velocity=parameters.get_param("minimum velocity"),
             max_vector_angle_rad=2 * np.pi * parameters.get_param("max. vector angle [deg]") / 360,
         )
+        if not result:
+            return None, status
+        cluster_mean, cluster_index_in_frame = result
+        cluster_points = buffer[-1].get_cluster_points(cluster_index_in_frame)
+        return ReflectorLocation(cluster_mean, cluster_points, cluster_index_in_frame), status
 
     def new_frame_pair(self):
         print("New frame pair")
         # first call calculate_marker_location of latest frames
-        result1, status1 = PairCalibrator.calc_marker_location(self._frame_buffer_1)
-        result2, status2 = PairCalibrator.calc_marker_location(self._frame_buffer_2)
+        reflector1, status1 = PairCalibrator.calc_marker_location(self._frame_buffer_1)
+        reflector2, status2 = PairCalibrator.calc_marker_location(self._frame_buffer_2)
         # TODO do something with the status field...
 
         # TODO use some logging system, remove those debug prints
         # print(f"{' ' * 20} status1: {str(status1).ljust(20)} status2: {str(status2).ljust(20)}")
 
-        if result1 is None or result2 is None:
+        if reflector1 is None or reflector2 is None:
             # Only continue if reflector is found in both new frames
             return
 
         print("Reflector found in both frames")
         # Save the obtained reflector locations
-        cluster1, index1 = result1
-        cluster1points = self._frame_buffer_1[-1].get_cluster_points(index1)
-        self.reflector_locations_1.append(ReflectorLocation(cluster1, cluster1points))
-
-        cluster2, index2 = result2
-        cluster2points = self._frame_buffer_2[-1].get_cluster_points(index2)
-        self.reflector_locations_2.append(ReflectorLocation(cluster2, cluster2points))
+        self.reflector_locations_1.append(reflector1)
+        self.reflector_locations_2.append(reflector2)
 
         if len(self.reflector_locations_1) < 3:
             # we need at least 3 point pairs
@@ -95,8 +103,8 @@ class PairCalibrator:
 
         print(f"Calculating new transformation (using {str(len(self.reflector_locations_1)).rjust(3)} points)")
         # Recalculate and publish transformation with new data
-        P = np.array([rl.cluster_mean[:3] for rl in self.reflector_locations_1])
-        Q = np.array([rl.cluster_mean[:3] for rl in self.reflector_locations_2])
+        P = np.array([rl.centroid for rl in self.reflector_locations_1])
+        Q = np.array([rl.centroid for rl in self.reflector_locations_2])
         # TODO discuss how to calculate the single weight for each point pair?
         weights = np.array([
             min(rl1.weight, rl2.weight)
