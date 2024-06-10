@@ -1,3 +1,4 @@
+import itertools
 from collections import deque
 from typing import Callable
 
@@ -7,7 +8,7 @@ from . import parameters
 from .frame import Frame
 from .locate_reflector.track_marker import find_marker_single_frame
 from .reflector_location import ReflectorLocation
-from .transformation import Transformation, calc_transformation_scipy
+from .transformation import Transformation, calc_transformation_scipy, apply_transformation
 
 
 class PairCalibrator:
@@ -103,9 +104,20 @@ class PairCalibrator:
 
         print(f"Calculating new transformation (using {str(len(self.reflector_locations_1)).rjust(3)} points)")
         # Recalculate and publish transformation with new data
-        P = np.array([rl.centroid for rl in self.reflector_locations_1])
-        Q = np.array([rl.centroid for rl in self.reflector_locations_2])
-        # TODO discuss how to calculate the single weight for each point pair?
+
+        P, Q = None, None
+        if self.transformation:
+            filtered1, filtered2 = self.get_locations_filtered()
+            if len(filtered1) > 3:
+                P = np.array([rl.centroid for rl in filtered1])
+                Q = np.array([rl.centroid for rl in filtered1])
+                print("using filtered reflector locations")
+        if not P:
+            # use unfiltered reflector locations until we have enough data
+            P = np.array([rl.centroid for rl in self.reflector_locations_1])
+            Q = np.array([rl.centroid for rl in self.reflector_locations_2])
+            print("using UNfiltered reflector locations")
+
         weights = np.array([
             min(rl1.weight, rl2.weight)
             for rl1, rl2 in zip(self.reflector_locations_1, self.reflector_locations_2)
@@ -113,3 +125,21 @@ class PairCalibrator:
         self.transformation = calc_transformation_scipy(P, Q, weights)
         if self._trafo_callback:
             self._trafo_callback(self.transformation, self._topic1, self._topic2)
+
+    def get_locations_filtered(self):
+        """
+        Applies filters based on all reflector locations found yet.
+
+        :return: Filtered version of
+        """
+        # drop point pairs whose points are comparably far apart from each other
+        points1 = np.array([p.centroid for p in self.reflector_locations_1])
+        points2 = np.array([p.centroid for p in self.reflector_locations_2])
+        points1_transformed = apply_transformation(points1, self.transformation)
+        distance = np.linalg.norm(points1_transformed - points2, axis=1)
+        filter1 = distance > np.mean(distance) * float(parameters.get_param("outlier_mean_factor"))
+
+        return (
+            list(itertools.compress(self.reflector_locations_1, filter1)),
+            list(itertools.compress(self.reflector_locations_2, filter1))
+        )
