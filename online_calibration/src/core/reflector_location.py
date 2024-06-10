@@ -13,7 +13,6 @@ class ReflectorLocation:
 
         self.cluster_points = cluster_points
         self.cluster_index_in_frame = cluster_index_in_frame
-        self.weight = 1
 
         self.normal_vector = self.fit_plane()
 
@@ -21,4 +20,14 @@ class ReflectorLocation:
         centered_points = self.cluster_points - self.centroid
         U, S, Vt = np.linalg.svd(centered_points)
         normal = Vt[-1]  # The normal of the plane is the last singular vector
+        normal /= np.linalg.norm(normal)
         return normal
+
+    @property
+    def weight(self):
+        # cosine similarity of normal of points in cluster and vector from origin (sensor location) to centroid
+        normal_weight = np.arccos(
+            self.normal_vector @ self.centroid / (np.linalg.norm(self.centroid) * np.linalg.norm(self.normal_vector))
+        )
+        # TODO implement weighting of weights
+        return normal_weight
