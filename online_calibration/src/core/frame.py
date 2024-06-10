@@ -9,7 +9,17 @@ from .locate_reflector.find_cluster_centers import get_cluster_centers_single_fr
 # can be found in the docs of find_cluster_centers.get_cluster_centers_single_frame
 
 class Frame:
+
     def __init__(self, data: np.ndarray, timestamp_sec: float, topic: str):
+        """
+        An object representing Lidar data in one frame of a single sensor.
+        Lazily computes and caches clustering results.
+
+        :param data: Raw point data from the sensor, each row is [x, y, z, intensity]
+        :param timestamp_sec: The timestamp when the frame was recorded, which approximately is the internal timestamp
+            when the last point was recorded.
+        :param topic: The ROS topic/sensor name the frame belongs to.
+        """
         self.topic = topic
         self.data = data
         self.timestamp_sec = timestamp_sec
