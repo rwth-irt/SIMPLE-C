@@ -117,7 +117,7 @@ def find_marker_single_frame(clusters, max_distance, min_velocity, max_vector_an
     elif len(enumerated) > 1:
         return None, "MULTIPLE_MATCHES"
     i = enumerated[0][0]  # get index of the chosen cluster
-    return (clusters[-1][i, :3], i), "UNIQUE_MATCH"  # only return xyz of cluster
+    return (clusters[-1][i], i), "UNIQUE_MATCH"
 
 
 def track_marker_multiple_frames(

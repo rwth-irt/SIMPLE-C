@@ -49,5 +49,5 @@ class Frame:
         )
 
     def get_cluster_points(self, index: int):
-        return self.clustering[self.clustering == index].copy()
+        return self.data[self.clustering == index, :3].copy()
         # call copy() to decouple from big frame array to allow for garbage collection
