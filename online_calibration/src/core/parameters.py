@@ -9,8 +9,9 @@ parameter_definitions = {
     "window size": "int",
     "max. vector angle [deg]": "float",
     "sample_rate_Hz": "float",
+    "outlier_mean_factor": "float",
+    "max_point_number_change_ratio": "float",
 }
-# TODO should we set defaults here? Would allow to not pass any extra file.
 
 
 def ros_declare_parameters(rosnode):
@@ -34,7 +35,6 @@ def ros_declare_parameters(rosnode):
         else:
             raise Exception(f"Parameter type '{typeinfo}' not yet implemented!")
         rosnode.declare_parameter(name=name, descriptor=descr)
-        # TODO descriptor=ParameterDescriptor(dynamic_typing=True))
 
 
 def init_from_yaml(filename):
