@@ -135,36 +135,3 @@ def find_marker_single_frame(
         return None, "MULTIPLE_MATCHES"
     i = enumerated[0][0]  # get index of the chosen cluster
     return (clusters[-1][i], i), "UNIQUE_MATCH"
-
-
-def track_marker_multiple_frames(
-        clusters, max_distance, min_velocity, window_size, max_vector_angle_rad
-) -> tuple[list[np.ndarray], list[int]]:
-    """
-    Applies :func:`find_marker_single_frame` successively for multiple frames.
-    Therefore, tracks the reflector in the data of a single sensor.
-    Passes slices of size `window_size` to :func:`find_marker_single_frame`.
-    Returns array of selected cluster centers and array of indices.
-
-    :param clusters: list with a numpy array per frame, containing all found cluster centers in this frame.
-      Slices of this list will be passed to :func:`find_marker_single_frame`.
-    :param max_distance: See :func:`find_marker_single_frame`.
-    :param min_velocity: See :func:`find_marker_single_frame`.
-    :param window_size: Length of the slices to pass to :func:`find_marker_single_frame`.
-    :param max_vector_angle_rad: See :func:`find_marker_single_frame`.
-    :return: Tuple (array of selected clusters, array holding indices of selected cluster per frame)
-    """
-    indices = [None] * (window_size - 1)  # can not calculate for early ones
-    centers = [None] * (window_size - 1)
-
-    for frame_i in range(len(clusters) - window_size + 1):
-        choice, _ = find_marker_single_frame(clusters[frame_i:frame_i + window_size],
-                                             max_distance, min_velocity, max_vector_angle_rad)
-        if choice is None:
-            centers.append(None)
-            indices.append(None)
-        else:
-            centers.append(choice[0])
-            indices.append(choice[1])
-
-    return centers, indices
