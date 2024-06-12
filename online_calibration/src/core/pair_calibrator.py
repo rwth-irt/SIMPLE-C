@@ -71,6 +71,7 @@ class PairCalibrator:
             max_distance=parameters.get_param("maximum neighbor distance"),
             min_velocity=parameters.get_param("minimum velocity"),
             max_vector_angle_rad=2 * np.pi * parameters.get_param("max. vector angle [deg]") / 360,
+            max_point_number_change_ratio=parameters.get_param("max_point_number_change_ratio")
         )
         if not result:
             return None, status

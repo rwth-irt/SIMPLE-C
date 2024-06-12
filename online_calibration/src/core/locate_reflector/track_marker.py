@@ -37,8 +37,9 @@ def get_nearest_neighbor_trace(clusters: list[np.ndarray], start_i) -> np.ndarra
     return np.array(out)
 
 
-def find_marker_single_frame(clusters, max_distance, min_velocity, max_vector_angle_rad) \
-        -> tuple[None | tuple[np.ndarray, int], str]:
+def find_marker_single_frame(
+        clusters, max_distance, min_velocity, max_vector_angle_rad, max_point_number_change_ratio
+) -> tuple[None | tuple[np.ndarray, int], str]:
     """
     Decide which cluster center in the **last** frame of `clusters` is most likely the reflector.
     The decision is **not** based on previous decisions!
@@ -54,6 +55,10 @@ def find_marker_single_frame(clusters, max_distance, min_velocity, max_vector_an
     :param max_distance: maximum distance between adjacent clusters in a trace
     :param min_velocity: minimum average movement distance for clusters between two frames in a trace
     :param max_vector_angle_rad: maximum angle in radians between two movement vectors for a cluster
+    :param max_point_number_change_ratio: For two adjacent clusters in a trace, ratio of the change in number of points
+        is calculated. If it is higher than this value, the trace is dropped.
+        Example: If the number of points changes from 80 to 100 or 60, the change is 20, which is 80 * 0.25.
+        If this parameter is set to less than 0.25, this trace would be dropped.
     :return: A tuple (result, status).
         `result` is None (no unique solution) or a tuple (cluster, cluster_index_in_frame).
         `cluster` is [x_mean, y_mean, z_mean, intensity_mean, number_of_points] as obtained by
@@ -107,6 +112,18 @@ def find_marker_single_frame(clusters, max_distance, min_velocity, max_vector_an
 
     enumerated = filter(
         lambda t: check_angle(t[1]),
+        enumerated
+    )
+
+    # Drop all traces where the number of points in adjacent clusters changes too rapidly
+    def check_point_number_ratio(trace: np.ndarray):
+        point_number = trace[..., 4]  # extract number of points from centroids
+        deltas = np.abs(np.diff(point_number))
+        change_ratio = deltas / point_number[:-1]
+        return np.all(change_ratio <= max_point_number_change_ratio)
+
+    enumerated = filter(
+        lambda t: check_point_number_ratio(t[1]),
         enumerated
     )
 
