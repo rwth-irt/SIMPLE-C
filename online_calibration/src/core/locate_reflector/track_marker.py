@@ -9,8 +9,6 @@ def get_nearest_neighbor(origin, candidates):
     return candidates[best_index]
 
 
-# TODO note somewhere that "center" and "cluster" is treated as synonym in most docstrings!
-
 def get_nearest_neighbor_trace(clusters: list[np.ndarray], start_i) -> np.ndarray:
     """
     Get the trace of nearest neighbors, going **backwards** from the "start cluster" `clusters[-1][start_i]`.

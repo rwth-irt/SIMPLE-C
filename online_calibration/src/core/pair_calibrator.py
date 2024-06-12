@@ -12,8 +12,20 @@ from .transformation import Transformation, calc_transformation_scipy, apply_tra
 
 
 class PairCalibrator:
+    """
+    An object which receives frame data from two sensors. If up-to-date frame data exists for both sensors,
+    a new transformation is calculated if possible. Caches the found ReflectorLocations.
+    """
 
     def __init__(self, topic1: str, topic2: str, trafo_callback: Callable[[Transformation, str, str], None] | None):
+        """
+        Initialize a new PairCalibrator.
+
+        :param topic1: topic name of detector 1
+        :param topic2: topic name of detector 2
+        :param trafo_callback: function to call when a new transformation is found. It is called with
+            (transformation, topic1, topic2).
+        """
         # Maximum age for a frame before it expires
         self._expiry_duration_sec = 1.0 / float(parameters.get_param("sample_rate_Hz")) * 0.6
         # Do not use 50% because if detectors are just offset equally, dropping one frame does not help.
@@ -31,6 +43,12 @@ class PairCalibrator:
         self._trafo_callback = trafo_callback
 
     def new_frame(self, f: Frame):
+        """
+        Call with new frame data for either topic1 or topic2. If a new transformation can be calculated using the
+        passed frame, self.trafo_callback will be called in turn.
+
+        :param f: The new frame.
+        """
         # store temporarily
         if f.topic == self._topic1:
             self._last1 = f
@@ -56,7 +74,7 @@ class PairCalibrator:
         self._last1 = None
         self._last2 = None
 
-        self.new_frame_pair()
+        self._new_frame_pair()
 
     @staticmethod
     def calc_marker_location(buffer: deque[Frame]) -> tuple[ReflectorLocation | None, str]:
@@ -82,7 +100,7 @@ class PairCalibrator:
         cluster_points = buffer[-1].get_cluster_points(cluster_index_in_frame)
         return ReflectorLocation(cluster_mean, cluster_points, cluster_index_in_frame), status
 
-    def new_frame_pair(self):
+    def _new_frame_pair(self):
         # first call calculate_marker_location of latest frames
         reflector1, status1 = PairCalibrator.calc_marker_location(self._frame_buffer_1)
         reflector2, status2 = PairCalibrator.calc_marker_location(self._frame_buffer_2)
@@ -108,10 +126,10 @@ class PairCalibrator:
         # Recalculate and publish transformation with new data
         P, Q, location_filter = None, None, None
         if self.transformation:
-            location_filter = self.get_location_filter()
+            location_filter = self._get_location_filter()
             if sum(location_filter) > 3:
-                P = np.array([rl.centroid for rl in filter_list(self.reflector_locations_1, location_filter)])
-                Q = np.array([rl.centroid for rl in filter_list(self.reflector_locations_2, location_filter)])
+                P = np.array([rl.centroid for rl in _filter_list(self.reflector_locations_1, location_filter)])
+                Q = np.array([rl.centroid for rl in _filter_list(self.reflector_locations_2, location_filter)])
         if P is None:
             # use unfiltered reflector locations until we have enough data
             P = np.array([rl.centroid for rl in self.reflector_locations_1])
@@ -122,15 +140,15 @@ class PairCalibrator:
             str(len(self.reflector_locations_1)).rjust(3)
         ))
 
-        weights = self.calculate_weights()
+        weights = self._calculate_weights()
         if location_filter is not None:
-            weights = list(filter_list(weights, location_filter))
+            weights = list(_filter_list(weights, location_filter))
 
         self.transformation = calc_transformation_scipy(P, Q, weights)
         if self._trafo_callback:
             self._trafo_callback(self.transformation, self._topic1, self._topic2)
 
-    def calculate_weights(self):
+    def _calculate_weights(self):
         # smaller normal cosine weight for each point pair
         normal_cosine_weights = np.min(
             np.stack((
@@ -160,7 +178,7 @@ class PairCalibrator:
                 + parameters.get_param("point_number_weight_weight") * point_number_weights
         )
 
-    def get_location_filter(self):
+    def _get_location_filter(self):
         """
         Applies filters based on all reflector locations found yet.
 
@@ -176,5 +194,5 @@ class PairCalibrator:
         return filter1
 
 
-def filter_list(to_filter, boolean_array) -> Iterable:
+def _filter_list(to_filter, boolean_array) -> Iterable:
     return itertools.compress(to_filter, boolean_array)
