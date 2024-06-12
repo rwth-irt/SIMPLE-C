@@ -10,5 +10,5 @@
     "sample_rate_Hz": 10.0
     "outlier_mean_factor": 3.0
     "max_point_number_change_ratio": 0.25
-    "normal_cosine_weight_weight": 0.5
-    "point_number_weight_weight": 0.5
+    "normal_cosine_weight_share": 0.5
+    "point_number_weight_share": 0.5

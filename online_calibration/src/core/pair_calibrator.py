@@ -174,8 +174,8 @@ class PairCalibrator:
 
         # TODO maybe rename those weight weights ^^
         return (
-                + parameters.get_param("normal_cosine_weight_weight") * normal_cosine_weights
-                + parameters.get_param("point_number_weight_weight") * point_number_weights
+                + parameters.get_param("normal_cosine_weight_share") * normal_cosine_weights
+                + parameters.get_param("point_number_weight_share") * point_number_weights
         )
 
     def _get_location_filter(self):
