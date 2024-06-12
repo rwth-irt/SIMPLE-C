@@ -24,10 +24,8 @@ class ReflectorLocation:
         return normal
 
     @property
-    def weight(self):
+    def normal_cosine_weight(self):
         # cosine similarity of normal of points in cluster and vector from origin (sensor location) to centroid
-        normal_weight = np.arccos(
+        return np.arccos(
             self.normal_vector @ self.centroid / (np.linalg.norm(self.centroid) * np.linalg.norm(self.normal_vector))
         )
-        # TODO implement weighting of weights
-        return normal_weight

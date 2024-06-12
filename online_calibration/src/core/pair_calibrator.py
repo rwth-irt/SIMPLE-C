@@ -122,16 +122,43 @@ class PairCalibrator:
             str(len(self.reflector_locations_1)).rjust(3)
         ))
 
-        weights = np.array([
-            min(rl1.weight, rl2.weight)
-            for rl1, rl2 in zip(self.reflector_locations_1, self.reflector_locations_2)
-        ])
+        weights = self.calculate_weights()
         if location_filter is not None:
             weights = list(filter_list(weights, location_filter))
 
         self.transformation = calc_transformation_scipy(P, Q, weights)
         if self._trafo_callback:
             self._trafo_callback(self.transformation, self._topic1, self._topic2)
+
+    def calculate_weights(self):
+        # smaller normal cosine weight for each point pair
+        normal_cosine_weights = np.min(
+            np.stack((
+                [rl.normal_cosine_weight for rl in self.reflector_locations_1],
+                [rl.normal_cosine_weight for rl in self.reflector_locations_2]
+            )),
+            axis=0
+        )
+
+        # weight from number of points in cluster
+        max_points_in_cluster = np.max(
+            [rl.number_of_points_in_cluster for rl in self.reflector_locations_1] +
+            [rl.normal_cosine_weight for rl in self.reflector_locations_2]
+        )
+
+        point_number_weights = np.min(
+            np.stack((
+                [rl.number_of_points_in_cluster / max_points_in_cluster for rl in self.reflector_locations_1],
+                [rl.number_of_points_in_cluster / max_points_in_cluster for rl in self.reflector_locations_2]
+            )),
+            axis=0
+        )
+
+        # TODO maybe rename those weight weights ^^
+        return (
+                + parameters.get_param("normal_cosine_weight_weight") * normal_cosine_weights
+                + parameters.get_param("point_number_weight_weight") * point_number_weights
+        )
 
     def get_location_filter(self):
         """
