@@ -15,7 +15,10 @@ class PairCalibrator:
 
     def __init__(self, topic1: str, topic2: str, trafo_callback: Callable[[Transformation, str, str], None] | None):
         # Maximum age for a frame before it expires
-        self._expiry_duration_sec = 1.0 / float(parameters.get_param("sample_rate_Hz")) / 2
+        self._expiry_duration_sec = 1.0 / float(parameters.get_param("sample_rate_Hz")) * 0.6
+        # Do not use 50% because if detectors are just offset equally, dropping one frame does not help.
+        # If dropping at 60%, the next offset will only be 40%. This avoids many frames to be dropped in sequence.
+
         self._frame_buffer_1: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
         self._frame_buffer_2: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
         self._topic1 = topic1
