@@ -1,6 +1,6 @@
 import itertools
 from collections import deque
-from typing import Callable
+from typing import Callable, Iterable
 
 import numpy as np
 
@@ -80,7 +80,6 @@ class PairCalibrator:
         return ReflectorLocation(cluster_mean, cluster_points, cluster_index_in_frame), status
 
     def new_frame_pair(self):
-        print("New frame pair")
         # first call calculate_marker_location of latest frames
         reflector1, status1 = PairCalibrator.calc_marker_location(self._frame_buffer_1)
         reflector2, status2 = PairCalibrator.calc_marker_location(self._frame_buffer_2)
@@ -103,31 +102,35 @@ class PairCalibrator:
             print("Not enough point pairs yet")
             return
 
-        print(f"Calculating new transformation (using {str(len(self.reflector_locations_1)).rjust(3)} points)")
         # Recalculate and publish transformation with new data
-
-        P, Q = None, None
+        P, Q, location_filter = None, None, None
         if self.transformation:
-            filtered1, filtered2 = self.get_locations_filtered()
-            if len(filtered1) > 3:
-                P = np.array([rl.centroid for rl in filtered1])
-                Q = np.array([rl.centroid for rl in filtered1])
-                print("using filtered reflector locations")
-        if not P:
+            location_filter = self.get_location_filter()
+            if sum(location_filter) > 3:
+                P = np.array([rl.centroid for rl in filter_list(self.reflector_locations_1, location_filter)])
+                Q = np.array([rl.centroid for rl in filter_list(self.reflector_locations_2, location_filter)])
+        if P is None:
             # use unfiltered reflector locations until we have enough data
             P = np.array([rl.centroid for rl in self.reflector_locations_1])
             Q = np.array([rl.centroid for rl in self.reflector_locations_2])
-            print("using UNfiltered reflector locations")
+
+        print("Calculating new transformation (using {0} / {1} point pairs)".format(
+            str(len(Q)).rjust(3),
+            str(len(self.reflector_locations_1)).rjust(3)
+        ))
 
         weights = np.array([
             min(rl1.weight, rl2.weight)
             for rl1, rl2 in zip(self.reflector_locations_1, self.reflector_locations_2)
         ])
+        if location_filter is not None:
+            weights = list(filter_list(weights, location_filter))
+
         self.transformation = calc_transformation_scipy(P, Q, weights)
         if self._trafo_callback:
             self._trafo_callback(self.transformation, self._topic1, self._topic2)
 
-    def get_locations_filtered(self):
+    def get_location_filter(self):
         """
         Applies filters based on all reflector locations found yet.
 
@@ -138,9 +141,10 @@ class PairCalibrator:
         points2 = np.array([p.centroid for p in self.reflector_locations_2])
         points1_transformed = apply_transformation(points1, self.transformation)
         distance = np.linalg.norm(points1_transformed - points2, axis=1)
-        filter1 = distance > np.mean(distance) * float(parameters.get_param("outlier_mean_factor"))
+        filter1 = distance < (np.mean(distance) * float(parameters.get_param("outlier_mean_factor")))
 
-        return (
-            list(itertools.compress(self.reflector_locations_1, filter1)),
-            list(itertools.compress(self.reflector_locations_2, filter1))
-        )
+        return filter1
+
+
+def filter_list(to_filter, boolean_array) -> Iterable:
+    return itertools.compress(to_filter, boolean_array)
