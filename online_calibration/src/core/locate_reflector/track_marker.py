@@ -9,8 +9,6 @@ def get_nearest_neighbor(origin, candidates):
     return candidates[best_index]
 
 
-# TODO note somewhere that "center" and "cluster" is treated as synonym in most docstrings!
-
 def get_nearest_neighbor_trace(clusters: list[np.ndarray], start_i) -> np.ndarray:
     """
     Get the trace of nearest neighbors, going **backwards** from the "start cluster" `clusters[-1][start_i]`.
@@ -37,8 +35,9 @@ def get_nearest_neighbor_trace(clusters: list[np.ndarray], start_i) -> np.ndarra
     return np.array(out)
 
 
-def find_marker_single_frame(clusters, max_distance, min_velocity, max_vector_angle_rad) \
-        -> tuple[None | tuple[np.ndarray, int], str]:
+def find_marker_single_frame(
+        clusters, max_distance, min_velocity, max_vector_angle_rad, max_point_number_change_ratio
+) -> tuple[None | tuple[np.ndarray, int], str]:
     """
     Decide which cluster center in the **last** frame of `clusters` is most likely the reflector.
     The decision is **not** based on previous decisions!
@@ -49,12 +48,19 @@ def find_marker_single_frame(clusters, max_distance, min_velocity, max_vector_an
 
     If a single cluster passes all filters, it is chosen. Otherwise no choice is made.
 
-    :param clusters: list with a numpy array per frame, containing all found cluster centers in this frame.
+    :param clusters: list with a numpy array per frame, containing all found cluster centers (as obtained
+        by find_cluster_centers.get_cluster_centers_single_frame) in this frame.
     :param max_distance: maximum distance between adjacent clusters in a trace
     :param min_velocity: minimum average movement distance for clusters between two frames in a trace
     :param max_vector_angle_rad: maximum angle in radians between two movement vectors for a cluster
+    :param max_point_number_change_ratio: For two adjacent clusters in a trace, ratio of the change in number of points
+        is calculated. If it is higher than this value, the trace is dropped.
+        Example: If the number of points changes from 80 to 100 or 60, the change is 20, which is 80 * 0.25.
+        If this parameter is set to less than 0.25, this trace would be dropped.
     :return: A tuple (result, status).
         `result` is None (no unique solution) or a tuple (cluster, cluster_index_in_frame).
+        `cluster` is [x_mean, y_mean, z_mean, intensity_mean, number_of_points] as obtained by
+        find_cluster_centers.get_cluster_centers_single_frame.
         `status` is a string indicating whether there was a match ("UNIQUE_MATCH"), no cluster or no
         match found ("NO_MATCH"), or multiple matches ("MULTIPLE_MATCHES").
     """
@@ -107,6 +113,18 @@ def find_marker_single_frame(clusters, max_distance, min_velocity, max_vector_an
         enumerated
     )
 
+    # Drop all traces where the number of points in adjacent clusters changes too rapidly
+    def check_point_number_ratio(trace: np.ndarray):
+        point_number = trace[..., 4]  # extract number of points from centroids
+        deltas = np.abs(np.diff(point_number))
+        change_ratio = deltas / point_number[:-1]
+        return np.all(change_ratio <= max_point_number_change_ratio)
+
+    enumerated = filter(
+        lambda t: check_point_number_ratio(t[1]),
+        enumerated
+    )
+
     enumerated = list(enumerated)
     if len(enumerated) == 0:
         # did not find unique solution
@@ -114,39 +132,4 @@ def find_marker_single_frame(clusters, max_distance, min_velocity, max_vector_an
     elif len(enumerated) > 1:
         return None, "MULTIPLE_MATCHES"
     i = enumerated[0][0]  # get index of the chosen cluster
-    return (clusters[-1][i, :3], i), "UNIQUE_MATCH"  # only return xyz of cluster
-    # TODO do we even need the intensity mean and number of clusters in this analysis? If not, don't pass
-    #  them in here and remove all the [:3] and [..., :3] etc.!
-
-
-def track_marker_multiple_frames(
-        clusters, max_distance, min_velocity, window_size, max_vector_angle_rad
-) -> tuple[list[np.ndarray], list[int]]:
-    """
-    Applies :func:`find_marker_single_frame` successively for multiple frames.
-    Therefore, tracks the reflector in the data of a single sensor.
-    Passes slices of size `window_size` to :func:`find_marker_single_frame`.
-    Returns array of selected cluster centers and array of indices.
-
-    :param clusters: list with a numpy array per frame, containing all found cluster centers in this frame.
-      Slices of this list will be passed to :func:`find_marker_single_frame`.
-    :param max_distance: See :func:`find_marker_single_frame`.
-    :param min_velocity: See :func:`find_marker_single_frame`.
-    :param window_size: Length of the slices to pass to :func:`find_marker_single_frame`.
-    :param max_vector_angle_rad: See :func:`find_marker_single_frame`.
-    :return: Tuple (array of selected clusters, array holding indices of selected cluster per frame)
-    """
-    indices = [None] * (window_size - 1)  # can not calculate for early ones
-    centers = [None] * (window_size - 1)
-
-    for frame_i in range(len(clusters) - window_size + 1):
-        choice, _ = find_marker_single_frame(clusters[frame_i:frame_i + window_size],
-                                             max_distance, min_velocity, max_vector_angle_rad)
-        if choice is None:
-            centers.append(None)
-            indices.append(None)
-        else:
-            centers.append(choice[0])
-            indices.append(choice[1])
-
-    return centers, indices
+    return (clusters[-1][i], i), "UNIQUE_MATCH"

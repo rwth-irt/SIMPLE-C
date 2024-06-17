@@ -1,5 +1,6 @@
+import itertools
 from collections import deque
-from typing import Callable
+from typing import Callable, Iterable
 
 import numpy as np
 
@@ -7,14 +8,29 @@ from . import parameters
 from .frame import Frame
 from .locate_reflector.track_marker import find_marker_single_frame
 from .reflector_location import ReflectorLocation
-from .transformation import Transformation, calc_transformation_scipy
+from .transformation import Transformation, calc_transformation_scipy, apply_transformation
 
 
 class PairCalibrator:
+    """
+    An object which receives frame data from two sensors. If up-to-date frame data exists for both sensors,
+    a new transformation is calculated if possible. Caches the found ReflectorLocations.
+    """
 
     def __init__(self, topic1: str, topic2: str, trafo_callback: Callable[[Transformation, str, str], None] | None):
+        """
+        Initialize a new PairCalibrator.
+
+        :param topic1: topic name of detector 1
+        :param topic2: topic name of detector 2
+        :param trafo_callback: function to call when a new transformation is found. It is called with
+            (transformation, topic1, topic2).
+        """
         # Maximum age for a frame before it expires
-        self._expiry_duration_sec = 1.0 / float(parameters.get_param("sample_rate_Hz")) / 2
+        self._expiry_duration_sec = 1.0 / float(parameters.get_param("sample_rate_Hz")) * 0.6
+        # Do not use 50% because if detectors are just offset equally, dropping one frame does not help.
+        # If dropping at 60%, the next offset will only be 40%. This avoids many frames to be dropped in sequence.
+
         self._frame_buffer_1: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
         self._frame_buffer_2: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
         self._topic1 = topic1
@@ -27,6 +43,12 @@ class PairCalibrator:
         self._trafo_callback = trafo_callback
 
     def new_frame(self, f: Frame):
+        """
+        Call with new frame data for either topic1 or topic2. If a new transformation can be calculated using the
+        passed frame, self.trafo_callback will be called in turn.
+
+        :param f: The new frame.
+        """
         # store temporarily
         if f.topic == self._topic1:
             self._last1 = f
@@ -52,56 +74,125 @@ class PairCalibrator:
         self._last1 = None
         self._last2 = None
 
-        self.new_frame_pair()
+        self._new_frame_pair()
 
     @staticmethod
-    def calc_marker_location(buffer: deque[Frame]):
+    def calc_marker_location(buffer: deque[Frame]) -> tuple[ReflectorLocation | None, str]:
+        """
+        Obtain a ReflectorLocation (if found) object from a time series of Frame objects.
+        Wraps track_marker.find_marker_single_frame and constructs ReflectorLocation objects.
+
+        :param buffer: a time series of Frame objects
+        :return: Tuple (result, status) where result is a ReflectorLocation or None, depending whether the reflector
+            was found in the given Frame objects. Status is the status obtained by find_marker_single_frame.
+        """
         centers = [f.cluster_centers for f in buffer]
-        return find_marker_single_frame(
+        result, status = find_marker_single_frame(
             centers,
             max_distance=parameters.get_param("maximum neighbor distance"),
             min_velocity=parameters.get_param("minimum velocity"),
             max_vector_angle_rad=2 * np.pi * parameters.get_param("max. vector angle [deg]") / 360,
+            max_point_number_change_ratio=parameters.get_param("max_point_number_change_ratio")
         )
+        if not result:
+            return None, status
+        cluster_mean, cluster_index_in_frame = result
+        cluster_points = buffer[-1].get_cluster_points(cluster_index_in_frame)
+        return ReflectorLocation(cluster_mean, cluster_points, cluster_index_in_frame), status
 
-    def new_frame_pair(self):
-        print("New frame pair")
+    def _new_frame_pair(self):
         # first call calculate_marker_location of latest frames
-        result1, status1 = PairCalibrator.calc_marker_location(self._frame_buffer_1)
-        result2, status2 = PairCalibrator.calc_marker_location(self._frame_buffer_2)
+        reflector1, status1 = PairCalibrator.calc_marker_location(self._frame_buffer_1)
+        reflector2, status2 = PairCalibrator.calc_marker_location(self._frame_buffer_2)
         # TODO do something with the status field...
 
         # TODO use some logging system, remove those debug prints
         # print(f"{' ' * 20} status1: {str(status1).ljust(20)} status2: {str(status2).ljust(20)}")
 
-        if result1 is None or result2 is None:
+        if reflector1 is None or reflector2 is None:
             # Only continue if reflector is found in both new frames
             return
 
         print("Reflector found in both frames")
         # Save the obtained reflector locations
-        cluster1, index1 = result1
-        cluster1points = self._frame_buffer_1[-1].get_cluster_points(index1)
-        self.reflector_locations_1.append(ReflectorLocation(cluster1, cluster1points))
-
-        cluster2, index2 = result2
-        cluster2points = self._frame_buffer_2[-1].get_cluster_points(index2)
-        self.reflector_locations_2.append(ReflectorLocation(cluster2, cluster2points))
+        self.reflector_locations_1.append(reflector1)
+        self.reflector_locations_2.append(reflector2)
 
         if len(self.reflector_locations_1) < 3:
             # we need at least 3 point pairs
             print("Not enough point pairs yet")
             return
 
-        print(f"Calculating new transformation (using {str(len(self.reflector_locations_1)).rjust(3)} points)")
         # Recalculate and publish transformation with new data
-        P = np.array([rl.cluster_mean[:3] for rl in self.reflector_locations_1])
-        Q = np.array([rl.cluster_mean[:3] for rl in self.reflector_locations_2])
-        # TODO discuss how to calculate the single weight for each point pair?
-        weights = np.array([
-            min(rl1.weight, rl2.weight)
-            for rl1, rl2 in zip(self.reflector_locations_1, self.reflector_locations_2)
-        ])
+        P, Q, location_filter = None, None, None
+        if self.transformation:
+            location_filter = self._get_location_filter()
+            if sum(location_filter) > 3:
+                P = np.array([rl.centroid for rl in _filter_list(self.reflector_locations_1, location_filter)])
+                Q = np.array([rl.centroid for rl in _filter_list(self.reflector_locations_2, location_filter)])
+        if P is None:
+            # use unfiltered reflector locations until we have enough data
+            P = np.array([rl.centroid for rl in self.reflector_locations_1])
+            Q = np.array([rl.centroid for rl in self.reflector_locations_2])
+
+        print("Calculating new transformation (using {0} / {1} point pairs)".format(
+            str(len(Q)).rjust(3),
+            str(len(self.reflector_locations_1)).rjust(3)
+        ))
+
+        weights = self._calculate_weights()
+        if location_filter is not None:
+            weights = list(_filter_list(weights, location_filter))
+
         self.transformation = calc_transformation_scipy(P, Q, weights)
         if self._trafo_callback:
             self._trafo_callback(self.transformation, self._topic1, self._topic2)
+
+    def _calculate_weights(self):
+        # smaller normal cosine weight for each point pair
+        normal_cosine_weights = np.min(
+            np.stack((
+                [rl.normal_cosine_weight for rl in self.reflector_locations_1],
+                [rl.normal_cosine_weight for rl in self.reflector_locations_2]
+            )),
+            axis=0
+        )
+
+        # weight from number of points in cluster
+        max_points_in_cluster = np.max(
+            [rl.number_of_points_in_cluster for rl in self.reflector_locations_1] +
+            [rl.normal_cosine_weight for rl in self.reflector_locations_2]
+        )
+
+        point_number_weights = np.min(
+            np.stack((
+                [rl.number_of_points_in_cluster / max_points_in_cluster for rl in self.reflector_locations_1],
+                [rl.number_of_points_in_cluster / max_points_in_cluster for rl in self.reflector_locations_2]
+            )),
+            axis=0
+        )
+
+        # TODO maybe rename those weight weights ^^
+        return (
+                + parameters.get_param("normal_cosine_weight_share") * normal_cosine_weights
+                + parameters.get_param("point_number_weight_share") * point_number_weights
+        )
+
+    def _get_location_filter(self):
+        """
+        Applies filters based on all reflector locations found yet.
+
+        :return: Filtered version of
+        """
+        # drop point pairs whose points are comparably far apart from each other
+        points1 = np.array([p.centroid for p in self.reflector_locations_1])
+        points2 = np.array([p.centroid for p in self.reflector_locations_2])
+        points1_transformed = apply_transformation(points1, self.transformation)
+        distance = np.linalg.norm(points1_transformed - points2, axis=1)
+        filter1 = distance < (np.mean(distance) * float(parameters.get_param("outlier_mean_factor")))
+
+        return filter1
+
+
+def _filter_list(to_filter, boolean_array) -> Iterable:
+    return itertools.compress(to_filter, boolean_array)

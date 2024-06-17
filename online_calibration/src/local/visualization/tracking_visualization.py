@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import open3d as o3d
+from open3d.cpu.pybind.geometry import TriangleMesh
 
 from ...core.frame import Frame
 from ...core.reflector_location import ReflectorLocation
@@ -18,9 +19,10 @@ colors = {
     "bright": np.array([1.0, 0.0, 0.0]),  # RED
     "cluster": np.array([0.0, 1.0, 0.0]),  # GREEN
     "reflector": np.array([0.0, 0.0, 1.0]),  # BLUE
+    "marker": np.array([1., 0.706, 0.]),  # yellow-orange
+    "trace": np.array([0.5, 0.706 / 2, 0.]),  # Brown
+    "normal": np.array([1., 1., 0.])  # yellow
 }
-marker_color = [1, 0.706, 0]
-trace_color = [0.5, 0.706 / 2, 0]  # like marker, but darker
 marker_radius = 0.14
 
 
@@ -28,11 +30,9 @@ class FrameVisInfo:
     def __init__(
             self,
             frame: Frame,
-            cluster_index_in_frame: int | None,
             reflector_location: ReflectorLocation | None,
     ):
         self.frame = frame
-        self.cluster_index_in_frame = cluster_index_in_frame
         self.reflector_location = reflector_location
 
         # create o3d pointcloud object with colors
@@ -40,7 +40,8 @@ class FrameVisInfo:
         point_colors = np.full((len(self.frame.data), 3), colors["any"])
         point_colors[c == -1] = colors["bright"]
         point_colors[c >= 0] = colors["cluster"]
-        point_colors[c == self.cluster_index_in_frame] = colors["reflector"]
+        if self.reflector_location:
+            point_colors[c == self.reflector_location.cluster_index_in_frame] = colors["reflector"]
 
         self.pcd = o3d.geometry.PointCloud()
         self.pcd.points = o3d.utility.Vector3dVector(self.frame.data[:, :3])
@@ -48,24 +49,41 @@ class FrameVisInfo:
 
         # create markers: ball and long cylinder
         if self.reflector_location:
-            self.marker1 = o3d.geometry.TriangleMesh.create_sphere(radius=marker_radius)
-            self.marker1.translate(self.reflector_location.cluster_mean[:3])
-            self.marker1.paint_uniform_color(marker_color)
+            self.marker1: TriangleMesh = o3d.geometry.TriangleMesh.create_sphere(radius=marker_radius)
+            self.marker1.translate(self.reflector_location.centroid)
+            self.marker1.paint_uniform_color(colors["marker"])
 
-            self.marker2 = o3d.geometry.TriangleMesh.create_cylinder(
+            self.marker2: TriangleMesh = o3d.geometry.TriangleMesh.create_cylinder(
                 radius=marker_radius / 4,
                 height=marker_radius * 160
             )
-            self.marker2.translate(self.reflector_location.cluster_mean[:3])
-            self.marker2.paint_uniform_color(marker_color)
+            self.marker2.translate(self.reflector_location.centroid)
+            self.marker2.paint_uniform_color(colors["marker"])
 
-            self.trace_marker = o3d.geometry.TriangleMesh.create_sphere(radius=marker_radius * .5)
-            self.trace_marker.translate(self.reflector_location.cluster_mean[:3])
-            self.trace_marker.paint_uniform_color(trace_color)
+            self.trace_marker: TriangleMesh = o3d.geometry.TriangleMesh.create_sphere(radius=marker_radius * .5)
+            self.trace_marker.translate(self.reflector_location.centroid)
+            self.trace_marker.paint_uniform_color(colors["trace"])
+
+            self.normal_marker: TriangleMesh = o3d.geometry.TriangleMesh.create_cylinder(
+                radius=marker_radius * .2,
+                height=marker_radius * 10
+            )  # shows in positive z direction after construction
+            # Now rotate the normal_marker such that it resembles the reflector normal.
+            v1 = self.reflector_location.normal_vector
+            v2 = np.array([0., 0., 1.])
+            rot_vector = np.cross(v1, v2) * np.arccos(v1 @ v2)
+            # both v1 and v2 are unit vectors, length of rot_vector is angle in radians
+            self.normal_marker.rotate(
+                o3d.geometry.get_rotation_matrix_from_axis_angle(rot_vector),
+                center=np.array([0., 0., 0.])  # around origin
+            )
+            self.normal_marker.translate(self.reflector_location.centroid)
+            self.normal_marker.paint_uniform_color(colors["normal"])
         else:
             self.marker1 = None
             self.marker2 = None
             self.trace_marker = None
+            self.normal_marker = None
 
 
 class TrackingVisualization:
@@ -112,6 +130,7 @@ class TrackingVisualization:
         if new.marker1:
             self.vis.add_geometry(new.marker1, reset_bounding_box=False)
             self.vis.add_geometry(new.marker2, reset_bounding_box=False)
+            self.vis.add_geometry(new.normal_marker, reset_bounding_box=False)
             # trace
             self.vis.add_geometry(new.trace_marker, reset_bounding_box=False)
             self.trace.append(new.trace_marker)
@@ -120,6 +139,7 @@ class TrackingVisualization:
             self.vis.remove_geometry(self.last.pcd)
             self.vis.remove_geometry(self.last.marker1)
             self.vis.remove_geometry(self.last.marker2)
+            self.vis.remove_geometry(self.last.normal_marker)
         self.last = new
 
         if not first_time:

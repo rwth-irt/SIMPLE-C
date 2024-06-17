@@ -42,6 +42,7 @@ def visualize_trafo(points, draw_point_match_markers=False):
 
 
 def color_pointcloud_by_index(cloud, color, step=5):
+    # TODO highlight which points have been used and which were filtered out
     l = len(cloud.points)
     colors = np.tile(color, (l, 1))
     for i in range(0, l, step):

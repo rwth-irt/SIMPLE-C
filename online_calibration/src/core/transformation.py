@@ -1,38 +1,7 @@
 from dataclasses import dataclass
-from typing import Dict, List
 
 import numpy as np
 from scipy.spatial.transform import Rotation
-
-
-def filter_locations(marker_locations: Dict[str, List[np.ndarray]], topics: List[str]):
-    """
-    Returns a filtered copy of `marker_locations` which only contains the points from frames where a location is
-    present for each sensor/topic.
-
-    NOTE: Be aware to specify `topics` such that the tracked object is known to be the same! Later usage of the filtered
-    locations will produce garbage if the tracked objects are actually uncorrelated and only appear in the same frames
-    randomly!
-
-    :param marker_locations: Dictionary mapping sensor topic to a list of marker locations (individual numpy arrays
-      or None if not found in this frame)
-    :param topics: A list of topics/sensors to consider.
-    :return: filtered copy of `marker_locations`
-    """
-    chosen_frames = []
-    out = {}
-    for frame_i in range(min(map(len, marker_locations.values()))):
-        all_present = True
-        for t in topics:
-            if marker_locations[t][frame_i] is None:
-                all_present = False
-                break
-        if all_present:
-            chosen_frames.append(frame_i)
-    for t in topics:
-        # convert to numpy array and filter
-        out[t] = np.array([marker_locations[t][i] for i in chosen_frames], dtype=np.float64)
-    return out
 
 
 def calc_transformation(P: np.array, Q: np.array):
