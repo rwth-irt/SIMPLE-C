@@ -1,4 +1,6 @@
-from src.local.cli_launch import main
+import src.core.ws_sender
+import src.local.cli_launch
 
 if __name__ == "__main__":
-    main()
+    src.core.ws_sender.main()  # starts ws thread
+    src.local.cli_launch.main()

@@ -9,6 +9,7 @@ from .frame import Frame
 from .locate_reflector.track_marker import find_marker_single_frame
 from .reflector_location import ReflectorLocation
 from .transformation import Transformation, calc_transformation_scipy, apply_transformation
+from .ws_sender import broadcast
 
 
 class PairCalibrator:
@@ -100,6 +101,16 @@ class PairCalibrator:
         cluster_points = buffer[-1].get_cluster_points(cluster_index_in_frame)
         return ReflectorLocation(cluster_mean, cluster_points, cluster_index_in_frame), status
 
+    def _broadcast_to_ws(self, refl_index_1=None, refl_index_2=None):
+        # broadcast to websockets
+        trafo = []
+        if self.transformation:
+            trafo = [(self._topic1, self._topic2, self.transformation)]
+        broadcast({
+            self._topic1: [self._frame_buffer_1[-1].data, self._frame_buffer_1[-1].clustering, refl_index_1],
+            self._topic2: [self._frame_buffer_2[-1].data, self._frame_buffer_2[-1].clustering, refl_index_2],
+        }, trafo)
+
     def _new_frame_pair(self):
         # first call calculate_marker_location of latest frames
         reflector1, status1 = PairCalibrator.calc_marker_location(self._frame_buffer_1)
@@ -111,7 +122,9 @@ class PairCalibrator:
 
         if reflector1 is None or reflector2 is None:
             # Only continue if reflector is found in both new frames
+            self._broadcast_to_ws()  # broadcast without marker index
             return
+        self._broadcast_to_ws(reflector1.cluster_index_in_frame, reflector2.cluster_index_in_frame)
 
         print("Reflector found in both frames")
         # Save the obtained reflector locations

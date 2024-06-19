@@ -2,9 +2,11 @@
 import rclpy
 
 from .online_calibrator import OnlineCalibrator
+from .core import ws_sender
 
 
 def main(args=None):
+    ws_sender.main()  # start up websocket server in new Thread
     rclpy.init(args=args)
     calibrator = OnlineCalibrator()
     try:
