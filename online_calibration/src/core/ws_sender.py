@@ -20,9 +20,15 @@ class _NumpyEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
+# counter to only send every n-th message
+msg_index = 0
+
+
 def broadcast(
         frames: dict[str, tuple[np.ndarray, np.ndarray, int]],
         transformations: list[tuple[str, str, Transformation]],
+        every_nth_point=1,
+        every_nth_message=4,
 ):
     """
 
@@ -30,21 +36,17 @@ def broadcast(
     :param transformations: list[(from, to, Transformation)]
     :return:
     """
-    def get_points(d: np.ndarray):
-        # only some points, only xyz
-        d = d[::4, :3].copy()
-        # swap x and z values for threejs
-        yvals = d[:, 1].copy()
-        d[:, 1] = d[:, 2]
-        d[:, 2] = yvals
-        return d.round(3).flatten()
+    global msg_index
+    msg_index += 1
+    if msg_index % every_nth_message != 0:
+        return
 
     data = {
         "frames": [
             {
                 "topic": topic,
-                "points": get_points(data),
-                "colors": color_index[::4],
+                "points": data[::every_nth_point, :3].round(3).flatten(),
+                "colors": color_index[::every_nth_point],
                 "marker_index": marker_index if marker_index is not None else -10  # (-10 is no valid color index)
             } for topic, (data, color_index, marker_index) in frames.items()
         ],
@@ -84,8 +86,10 @@ async def _on_connection(socket: websockets.WebSocketServerProtocol):
 
 
 async def _ws_thread_main():
-    async with websockets.serve(_on_connection, "localhost", 6789):
+    async with websockets.serve(_on_connection, "0.0.0.0", 6789):
+        print("WS server listening")
         await asyncio.Future()  # run forever
+    print("WS server stopped")
 
 
 # Event loop for ws server
