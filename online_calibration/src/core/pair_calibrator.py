@@ -149,7 +149,13 @@ class PairCalibrator:
             self._trafo_callback(self.transformation, self._topic1, self._topic2)
 
     def _calculate_weights(self):
-        # smaller normal cosine weight for each point pair
+        normal_weight_share = parameters.get_param("normal_cosine_weight_share")
+        number_weight_share = parameters.get_param("point_number_weight_share")
+        if normal_weight_share == 0 and number_weight_share == 0:
+            # both weights were disabled, use unity weights
+            return np.ones((len(self.reflector_locations_1)))
+
+        # normal cosine weight for each point pair (choose smaller value per pair)
         normal_cosine_weights = np.min(
             np.stack((
                 [rl.normal_cosine_weight for rl in self.reflector_locations_1],
@@ -161,8 +167,8 @@ class PairCalibrator:
         # weight from number of points in cluster
         max_points_in_cluster = np.max(
             [rl.number_of_points_in_cluster for rl in self.reflector_locations_1] +
-            [rl.normal_cosine_weight for rl in self.reflector_locations_2]
-        )
+            [rl.number_of_points_in_cluster for rl in self.reflector_locations_2]
+        )  # number of points in biggest cluster of all sensor's frames combined
 
         point_number_weights = np.min(
             np.stack((
@@ -170,12 +176,11 @@ class PairCalibrator:
                 [rl.number_of_points_in_cluster / max_points_in_cluster for rl in self.reflector_locations_2]
             )),
             axis=0
-        )
+        )  # weight number in each cluster relative to maximum, choose smaller value per pair
 
-        # TODO maybe rename those weight weights ^^
         return (
-                + parameters.get_param("normal_cosine_weight_share") * normal_cosine_weights
-                + parameters.get_param("point_number_weight_share") * point_number_weights
+                + normal_weight_share * normal_cosine_weights
+                + number_weight_share * point_number_weights
         )
 
     def _get_location_filter(self):
