@@ -45,8 +45,8 @@ def broadcast(
         "frames": [
             {
                 "topic": topic,
-                "points": data[::every_nth_point, :3].round(3).flatten(),
-                "colors": color_index[::every_nth_point],
+                "points": data[::every_nth_point, :3].flatten().astype(np.float64).round(2),
+                "colors": color_index[::every_nth_point].astype(np.int8),
                 "marker_index": marker_index if marker_index is not None else -10  # (-10 is no valid color index)
             } for topic, (data, color_index, marker_index) in frames.items()
         ],
