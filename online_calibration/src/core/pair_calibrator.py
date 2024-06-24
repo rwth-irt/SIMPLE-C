@@ -9,7 +9,6 @@ from .frame import Frame
 from .locate_reflector.track_marker import find_marker_single_frame
 from .reflector_location import ReflectorLocation
 from .transformation import Transformation, calc_transformation_scipy, apply_transformation
-from .ws_sender import broadcast
 
 
 class PairCalibrator:
@@ -101,15 +100,6 @@ class PairCalibrator:
         cluster_points = buffer[-1].get_cluster_points(cluster_index_in_frame)
         return ReflectorLocation(cluster_mean, cluster_points, cluster_index_in_frame), status
 
-    def _broadcast_to_ws(self, refl_index_1=None, refl_index_2=None):
-        # broadcast to websockets
-        trafo = []
-        if self.transformation:
-            trafo = [(self.topic1, self.topic2, self.transformation)]
-        broadcast({
-            self.topic1: [self._frame_buffer_1[-1].data, self._frame_buffer_1[-1].clustering, refl_index_1],
-            self.topic2: [self._frame_buffer_2[-1].data, self._frame_buffer_2[-1].clustering, refl_index_2],
-        }, trafo)
 
     def _new_frame_pair(self):
         # first call calculate_marker_location of latest frames
@@ -122,9 +112,7 @@ class PairCalibrator:
 
         if reflector1 is None or reflector2 is None:
             # Only continue if reflector is found in both new frames
-            self._broadcast_to_ws()  # broadcast without marker index
             return
-        self._broadcast_to_ws(reflector1.cluster_index_in_frame, reflector2.cluster_index_in_frame)
 
         print("Reflector found in both frames")
         # Save the obtained reflector locations
@@ -185,17 +173,15 @@ class PairCalibrator:
             axis=0
         )
 
-        # TODO maybe rename those weight weights ^^
         return (
                 + parameters.get_param("normal_cosine_weight_share") * normal_cosine_weights
                 + parameters.get_param("point_number_weight_share") * point_number_weights
         )
 
-    def _get_location_filter(self):
+    def _get_location_filter(self) -> np.ndarray:
         """
-        Applies filters based on all reflector locations found yet.
-
-        :return: Filtered version of
+        Returns a filter boolean array of filters for which an initial transformation must be present.
+        Currently, this is only whether the distance between two transformed reflector locations is very large.
         """
         # drop point pairs whose points are comparably far apart from each other
         points1 = np.array([p.centroid for p in self.reflector_locations_1])

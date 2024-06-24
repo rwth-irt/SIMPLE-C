@@ -6,6 +6,8 @@ import threading
 import numpy as np
 import websockets
 
+from .frame import Frame
+from .reflector_location import ReflectorLocation
 from .transformation import Transformation
 
 logging.basicConfig(level=logging.INFO)
@@ -20,54 +22,76 @@ class _NumpyEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-# counter to only send every n-th message
-msg_index = 0
+frame_send_counter = {
+    "offset": 0
+}
 
 
-def broadcast(
-        frames: dict[str, tuple[np.ndarray, np.ndarray, int]],
-        transformations: list[tuple[str, str, Transformation]],
-        every_nth_point=1,
-        every_nth_message=4,
+def broadcast_frame(
+        frame: Frame,
+        reflector_cluster_index: int = None,
+        every_nth_point=3,
+        every_nth_message=3,
 ):
-    """
+    # called from PairCalibrator when new frame has been analyzed
 
-    :param frames: dict{topic -> (points, clustering)}
-    :param transformations: list[(from, to, Transformation)]
-    :return:
-    """
-    global msg_index
-    msg_index += 1
-    if msg_index % every_nth_message != 0:
+    # check whether to skip this message due to every_nth_message
+    if frame.topic not in frame_send_counter:
+        frame_send_counter[frame.topic] = frame_send_counter["offset"]
+        frame_send_counter["offset"] += 1
+    frame_send_counter[frame.topic] += 1
+    if frame_send_counter[frame.topic] % every_nth_message != 0:
         return
 
+    colors_edited = frame.clustering[::every_nth_point].astype(np.int8)
+    colors_edited[colors_edited >= 0] = 0  # avoid unused multi-digit numbers
+    colors_edited[colors_edited == reflector_cluster_index] = -3  # websocket-specific special value
     data = {
-        "frames": [
-            {
-                "topic": topic,
-                "points": data[::every_nth_point, :3].flatten().astype(np.float64).round(2),
-                "colors": color_index[::every_nth_point].astype(np.int8),
-                "marker_index": marker_index if marker_index is not None else -10  # (-10 is no valid color index)
-            } for topic, (data, color_index, marker_index) in frames.items()
-        ],
-        "transformations": [
-            {
-                "from": a,
-                "to": b,
-                "trafo": {
-                    "t": t.t,
-                    "R_quat": t.R_quat
-                }
-            } for a, b, t in transformations
-        ]
+        "type": "pointcloud",
+        "topic": frame.topic,
+        "data": {
+            "points": frame.data[::every_nth_point, :3].flatten().astype(np.float64).round(2),
+            "colors": colors_edited,
+        }
     }
-    msg = json.dumps(data, cls=_NumpyEncoder)
-    # queue this for execution in ws server thread
+    # Sending this in a more compressed/binary format may be good...
+    # However, the ws server *should* at least compress data.
+    _broadcast_internal(data)
+
+
+def broadcast_metadata(
+        topic: str,
+        reflector_locations: list[ReflectorLocation],
+        transformation: Transformation
+):
+    # called from OnlineCalibrator after calculating absolute transformations
+    locations = np.array([rl.centroid[:3] for rl in reflector_locations]).flatten().astype(np.float64).round(2)
+    data = {
+        "type": "metadata",
+        "topic": topic,
+        "data": {
+            "reflector_locations": locations,
+            "transformation": {
+                "t": transformation.t,
+                "R_quat": transformation.R_quat
+            }
+        }
+    }
+    _broadcast_internal(data)
+
+
+# TODO add separate tracking_status message if required, send it when available (i.e. from pairCalibrator)
+
+
+def _broadcast_internal(data: dict):
+    """Send a data dict to all clients, thread-safe (can be called from any thread)"""
+    msg = json.dumps(data, cls=_NumpyEncoder, indent=0, separators=(',', ':'), allow_nan=False)  # no whitespace in JSON
     asyncio.run_coroutine_threadsafe(_broadcast(msg), loop)
 
 
 async def _broadcast(msg: str):
     for c in _clients:
+        print("Sending WS message....")
         await c.send(msg)
 
 

@@ -51,7 +51,7 @@ class Transformation:
         return Transformation(
             R=self.R.T,
             t=-self.t,
-            R_quat=Rotation.from_quat(self.R_quat).inv().as_quat(False),
+            R_quat=Rotation.from_quat(self.R_quat).inv().as_quat(),
             R_sensitivity=np.zeros((3, 3))
         )
 
@@ -69,7 +69,7 @@ class Transformation:
         return Transformation(
             R=matrix[:3, :3],
             t=matrix[:3, 3],
-            R_quat=Rotation.from_matrix(matrix[:3, :3]).as_quat(False),
+            R_quat=Rotation.from_matrix(matrix[:3, :3]).as_quat(),
             R_sensitivity=np.zeros((3, 3))
         )
 

@@ -5,7 +5,7 @@ from sensor_msgs_py import point_cloud2
 from sensor_msgs_py.numpy_compat import structured_to_unstructured
 
 from . import resolve_trafo_chain
-from .core import parameters
+from .core import parameters, ws_sender
 from .core.frame import Frame
 from .core.pair_calibrator import PairCalibrator
 from .core.transformation import Transformation
@@ -77,6 +77,7 @@ class OnlineCalibrator(Node):
             )
         )
         self.main_sensor_topic = str(self.get_parameter("main_sensor").get_parameter_value().string_value.strip())
+        print(f"Main sensor is {self.main_sensor_topic}")
 
         self.trafo_publisher = self.create_publisher(TransformStamped, "transformations", 10)
 
@@ -95,8 +96,8 @@ class OnlineCalibrator(Node):
 
         # initialize ROS node, add publishers and subscribe to sensors
         for topic in topics:
-            # subscribe to all sensors
-            self.create_subscription(
+            # subscribe to all sensors' ROS topics
+            self.create_subscription(  # (Function inherited from rclpy.Node)
                 point_cloud2.PointCloud2,
                 topic,
                 lambda pc2, t=topic: self.on_message(t, pc2),
@@ -110,6 +111,7 @@ class OnlineCalibrator(Node):
             self.pair_calibrators[b].append(pc)
 
         self.trafo_chains = resolve_trafo_chain.get_shortest_pair_paths(sensor_pairs, self.main_sensor_topic)
+        print(f"Trafo chains: {self.trafo_chains}")
 
         print("Waiting for sensor data...")
 
@@ -134,6 +136,7 @@ class OnlineCalibrator(Node):
         t_sec = timestamp_ros.sec + timestamp_ros.nanosec * 1.e-9
 
         frame = Frame(data, t_sec, topic)
+        ws_sender.broadcast_frame(frame)
         # pass the new frame to all interested PairCalibrators, which will perform
         # buffering and calculate a transformation if possible
         for pc in self.pair_calibrators[topic]:
@@ -172,9 +175,10 @@ class OnlineCalibrator(Node):
         t.transform.rotation.w = trafo.R_quat[3]
         self.trafo_publisher.publish(t)
 
-        self.update_transformations()
+        self._update_transformations()
+        self._broadcast_websocket()
 
-    def get_specific_transformation(self, from_topic: str, to_topic: str) -> Transformation | None:
+    def _get_specific_transformation(self, from_topic: str, to_topic: str) -> Transformation | None:
         """
         For two topics (from, to) returns the Transformation object of the specific pairCalibrator (or None).
         If required, the inverse transformation is returned, depending of the "direction" of the PairCalibrator.
@@ -193,7 +197,7 @@ class OnlineCalibrator(Node):
                 return pc.transformation.inverse
         raise Exception("No paircalibrator for required transformation, this should not happen")
 
-    def update_transformations(self):
+    def _update_transformations(self):
         """
         Based on the current transformations of all PairCalibrators, try to calculate
         transformations to directly transform sensor [topic]s data to self.main_sensor_topic.
@@ -207,14 +211,39 @@ class OnlineCalibrator(Node):
         for topic in self.transformations:
             if topic == self.main_sensor_topic:
                 self.transformations[topic] = Transformation.unity()
+                continue
+
             trafos = [
                 # switch to homogeneous transformation matrices for easy chaining
-                self.get_specific_transformation(from_topic, to_topic).matrix
+                self._get_specific_transformation(from_topic, to_topic).matrix
                 for from_topic, to_topic in self.trafo_chains[topic]
             ]
-            if None in trafos:
+
+            # if None in trafos:
+            #     continue
+            # "if None in trafos" does not work because numpy is annoying
+            # minimal example: None in [array([1,2]), None] -> ValueError (I consider this a bug...)
+            # so we do it manually.
+            none_in_trafos = False
+            for t in trafos:
+                if t is None:
+                    none_in_trafos = True
+                    break
+            if none_in_trafos:
                 continue
-            combined = trafos[0]
+
+            combined = trafos.pop(0)
             while trafos:
-                combined = trafos.pop() @ combined
+                combined = trafos.pop(0) @ combined
             self.transformations[topic] = Transformation.from_matrix(combined)  # switch back to Transformation object
+
+    def _broadcast_websocket(self):
+        for topic in self.transformations:
+            if not self.transformations[topic]:
+                continue
+            pc = self.pair_calibrators[topic][0]
+            ws_sender.broadcast_metadata(
+                topic=topic,
+                reflector_locations=pc.reflector_locations_1 if pc.topic1 == topic else pc.reflector_locations_2,
+                transformation=self.transformations[topic]
+            )
