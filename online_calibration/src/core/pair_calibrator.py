@@ -34,8 +34,8 @@ class PairCalibrator:
 
         self._frame_buffer_1: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
         self._frame_buffer_2: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
-        self._topic1 = topic1
-        self._topic2 = topic2
+        self.topic1 = topic1
+        self.topic2 = topic2
         self._last1: Frame | None = None
         self._last2: Frame | None = None
         self.reflector_locations_1: list[ReflectorLocation] = []
@@ -51,21 +51,21 @@ class PairCalibrator:
         :param f: The new frame.
         """
         # store temporarily
-        if f.topic == self._topic1:
+        if f.topic == self.topic1:
             self._last1 = f
         else:
-            assert f.topic == self._topic2
+            assert f.topic == self.topic2
             self._last2 = f
         if self._last1 is None or self._last2 is None:
             return
 
         # check if temporary frames are expired
         if self._last1.timestamp_sec - self._last2.timestamp_sec > self._expiry_duration_sec:
-            print(f"Frame for {self._topic2} expired.")
+            print(f"Frame for {self.topic2} expired.")
             self._last2 = None
             return
         if self._last2.timestamp_sec - self._last1.timestamp_sec > self._expiry_duration_sec:
-            print(f"Frame for {self._topic1} expired.")
+            print(f"Frame for {self.topic1} expired.")
             self._last1 = None
             return
 
@@ -105,10 +105,10 @@ class PairCalibrator:
         # broadcast to websockets
         trafo = []
         if self.transformation:
-            trafo = [(self._topic1, self._topic2, self.transformation)]
+            trafo = [(self.topic1, self.topic2, self.transformation)]
         broadcast({
-            self._topic1: [self._frame_buffer_1[-1].data, self._frame_buffer_1[-1].clustering, refl_index_1],
-            self._topic2: [self._frame_buffer_2[-1].data, self._frame_buffer_2[-1].clustering, refl_index_2],
+            self.topic1: [self._frame_buffer_1[-1].data, self._frame_buffer_1[-1].clustering, refl_index_1],
+            self.topic2: [self._frame_buffer_2[-1].data, self._frame_buffer_2[-1].clustering, refl_index_2],
         }, trafo)
 
     def _new_frame_pair(self):
@@ -159,7 +159,7 @@ class PairCalibrator:
 
         self.transformation = calc_transformation_scipy(P, Q, weights)
         if self._trafo_callback:
-            self._trafo_callback(self.transformation, self._topic1, self._topic2)
+            self._trafo_callback(self.transformation, self.topic1, self.topic2)
 
     def _calculate_weights(self):
         # smaller normal cosine weight for each point pair

@@ -45,6 +45,43 @@ class Transformation:
 
     # TODO add calculation of (un)certainty
 
+    @property
+    def inverse(self):
+        """Warning: loses R_sensitivity!"""
+        return Transformation(
+            R=self.R.T,
+            t=-self.t,
+            R_quat=Rotation.from_quat(self.R_quat).inv().as_quat(False),
+            R_sensitivity=np.zeros((3, 3))
+        )
+
+    @property
+    def matrix(self) -> np.ndarray:
+        out = np.zeros((4, 4))
+        out[3, 3] = 1
+        out[:3, :3] = self.R
+        out[:3, 3] = self.t
+        return out
+
+    @staticmethod
+    def from_matrix(matrix: np.ndarray):
+        """Warning: loses R_sensitivity!"""
+        return Transformation(
+            R=matrix[:3, :3],
+            t=matrix[:3, 3],
+            R_quat=Rotation.from_matrix(matrix[:3, :3]).as_quat(False),
+            R_sensitivity=np.zeros((3, 3))
+        )
+
+    @staticmethod
+    def unity():
+        return Transformation(
+            R=np.eye(3),
+            t=np.zeros((3)),
+            R_quat=np.array([1, 0, 0, 0]),
+            R_sensitivity=np.zeros((3, 3))
+        )
+
 
 def calc_transformation_scipy(P: np.ndarray, Q: np.ndarray, weights: np.ndarray = None) -> Transformation:
     """

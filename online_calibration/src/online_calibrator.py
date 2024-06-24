@@ -1,10 +1,10 @@
-import numpy as np
 from geometry_msgs.msg import TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from rclpy.node import Node
 from sensor_msgs_py import point_cloud2
 from sensor_msgs_py.numpy_compat import structured_to_unstructured
 
+from . import resolve_trafo_chain
 from .core import parameters
 from .core.frame import Frame
 from .core.pair_calibrator import PairCalibrator
@@ -68,12 +68,25 @@ class OnlineCalibrator(Node):
         ]
         print(f"Parsed the following sensor pairs: {sensor_pairs}")  # debug/info print
 
+        # ROS parameter "main_sensor"
+        self.declare_parameter(
+            name="main_sensor",
+            descriptor=ParameterDescriptor(
+                name="main_sensor",
+                type=ParameterType.PARAMETER_STRING
+            )
+        )
+        self.main_sensor_topic = str(self.get_parameter("main_sensor").get_parameter_value().string_value.strip())
+
         self.trafo_publisher = self.create_publisher(TransformStamped, "transformations", 10)
 
         topics = set()  # collect the topics we have to subscribe to
         for a, b in sensor_pairs:
             topics.add(a)
             topics.add(b)
+        self.transformations: dict[str, Transformation | None] = {
+            t: None for t in topics
+        }
 
         # a dict which holds a list of interested paircalibrators per topic
         self.pair_calibrators: dict[str, list[PairCalibrator]] = {
@@ -86,7 +99,7 @@ class OnlineCalibrator(Node):
             self.create_subscription(
                 point_cloud2.PointCloud2,
                 topic,
-                lambda pc2, topic=topic: self.on_message(topic, pc2),
+                lambda pc2, t=topic: self.on_message(t, pc2),
                 10
             )
 
@@ -96,9 +109,20 @@ class OnlineCalibrator(Node):
             self.pair_calibrators[a].append(pc)
             self.pair_calibrators[b].append(pc)
 
+        self.trafo_chains = resolve_trafo_chain.get_shortest_pair_paths(sensor_pairs, self.main_sensor_topic)
+
         print("Waiting for sensor data...")
 
     def on_message(self, topic: str, pc2: point_cloud2.PointCloud2):
+        """
+        This method should be called whenever a new PointCloud2 message is available for any sensor of interest.
+        This is mainly called by the ROS receiver callback (see constructor of OnlineCalibrator).
+
+        :param topic: The topic a new PointCloud has been received for
+        :param pc2: The PointCloud2 message object
+        :return: Nothing, passes the data to the respective PairCalibrators, which in turn call their callbacks
+            when a new Transformation has been found.
+        """
         data = get_numpy_from_pc2(pc2, ["x", "y", "z", "intensity"])
 
         # As timestamp, we use the one from the ROS message, as it is easy to obtain.
@@ -132,6 +156,7 @@ class OnlineCalibrator(Node):
         print("sensitivity matrix for rotation =")
         print(trafo.R_sensitivity)
 
+        # Publish in ROS
         # Adapted from http://docs.ros.org/en/humble/Tutorials/Intermediate/Tf2/Writing-A-Tf2-Broadcaster-Py.html
         t = TransformStamped()
         t.header.stamp = self.get_clock().now().to_msg()
@@ -146,3 +171,50 @@ class OnlineCalibrator(Node):
         t.transform.rotation.z = trafo.R_quat[2]
         t.transform.rotation.w = trafo.R_quat[3]
         self.trafo_publisher.publish(t)
+
+        self.update_transformations()
+
+    def get_specific_transformation(self, from_topic: str, to_topic: str) -> Transformation | None:
+        """
+        For two topics (from, to) returns the Transformation object of the specific pairCalibrator (or None).
+        If required, the inverse transformation is returned, depending of the "direction" of the PairCalibrator.
+
+        :param from_topic: the "from" topic
+        :param to_topic: the "to" topic
+        :return: The Transformation object of the respective PairCalibrator (inverted, if necessary)
+            or None if not present.
+        """
+        for pc in self.pair_calibrators[from_topic]:
+            if from_topic == pc.topic1 and to_topic == pc.topic2:
+                return pc.transformation  # may be None, which is ok
+            if to_topic == pc.topic1 and from_topic == pc.topic2:
+                if pc.transformation is None:
+                    return None
+                return pc.transformation.inverse
+        raise Exception("No paircalibrator for required transformation, this should not happen")
+
+    def update_transformations(self):
+        """
+        Based on the current transformations of all PairCalibrators, try to calculate
+        transformations to directly transform sensor [topic]s data to self.main_sensor_topic.
+
+        Only calculates where possible (i.e. all partial transformations are present and there
+        is a chain of transformations which actually leads to self.main_sensor_topic!).
+        Other entries are left at None.
+
+        :return: Nothing, updates self.transformations
+        """
+        for topic in self.transformations:
+            if topic == self.main_sensor_topic:
+                self.transformations[topic] = Transformation.unity()
+            trafos = [
+                # switch to homogeneous transformation matrices for easy chaining
+                self.get_specific_transformation(from_topic, to_topic).matrix
+                for from_topic, to_topic in self.trafo_chains[topic]
+            ]
+            if None in trafos:
+                continue
+            combined = trafos[0]
+            while trafos:
+                combined = trafos.pop() @ combined
+            self.transformations[topic] = Transformation.from_matrix(combined)  # switch back to Transformation object
