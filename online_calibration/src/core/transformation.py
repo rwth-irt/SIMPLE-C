@@ -40,7 +40,7 @@ def calc_transformation(P: np.array, Q: np.array):
 class Transformation:
     R: np.ndarray  # Rotation matrix
     t: np.ndarray  # Translation vector
-    R_quat: np.ndarray  # Rotation quaternion
+    R_quat: np.ndarray  # Rotation quaternion TODO calculate instead of specifying explicitly!
     R_sensitivity: np.ndarray  # Sensitivity matrix for R
 
     # TODO add calculation of (un)certainty
@@ -78,7 +78,7 @@ class Transformation:
         return Transformation(
             R=np.eye(3),
             t=np.zeros((3)),
-            R_quat=np.array([1, 0, 0, 0]),
+            R_quat=np.array([0, 0, 0, 1]),
             R_sensitivity=np.zeros((3, 3))
         )
 

@@ -91,7 +91,6 @@ def _broadcast_internal(data: dict):
 
 async def _broadcast(msg: str):
     for c in _clients:
-        print("Sending WS message....")
         await c.send(msg)
 
 

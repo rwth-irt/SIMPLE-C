@@ -100,7 +100,6 @@ class PairCalibrator:
         cluster_points = buffer[-1].get_cluster_points(cluster_index_in_frame)
         return ReflectorLocation(cluster_mean, cluster_points, cluster_index_in_frame), status
 
-
     def _new_frame_pair(self):
         # first call calculate_marker_location of latest frames
         reflector1, status1 = PairCalibrator.calc_marker_location(self._frame_buffer_1)

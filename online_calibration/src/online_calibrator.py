@@ -192,6 +192,7 @@ class OnlineCalibrator(Node):
             if from_topic == pc.topic1 and to_topic == pc.topic2:
                 return pc.transformation  # may be None, which is ok
             if to_topic == pc.topic1 and from_topic == pc.topic2:
+                # return inverse
                 if pc.transformation is None:
                     return None
                 return pc.transformation.inverse
@@ -230,6 +231,8 @@ class OnlineCalibrator(Node):
                     none_in_trafos = True
                     break
             if none_in_trafos:
+                # we can not calculate this transformation yet, as the complete sequence of
+                # transformations to the main_sensor is not known
                 continue
 
             combined = trafos.pop(0)
