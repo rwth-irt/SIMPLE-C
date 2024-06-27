@@ -5,6 +5,7 @@ import threading
 
 import numpy as np
 import websockets
+from scipy.spatial.transform import Rotation
 
 from .frame import Frame
 from .reflector_location import ReflectorLocation
@@ -59,7 +60,7 @@ def broadcast_frame(
     _broadcast_internal(data)
 
 
-def broadcast_metadata(
+def broadcast_sensor_metadata(
         topic: str,
         reflector_locations: list[ReflectorLocation],
         transformation: Transformation
@@ -76,6 +77,29 @@ def broadcast_metadata(
                 "R_quat": transformation.R_quat
             }
         }
+    }
+    _broadcast_internal(data)
+
+
+def broadcast_pair_metadata(
+        from_topic: str,
+        to_topic: str,
+        trafo: Transformation,
+        used_point_pairs: int,
+        total_point_pairs: int
+):
+    sensitivity_number = np.linalg.norm(trafo.R_sensitivity, ord="fro")  # frobenius norm, single value
+    data = {
+        "type": "pair_metadata",
+        "from_topic": from_topic,
+        "to_topic": to_topic,
+        "transformation": {
+            "t": trafo.t,
+            "R_euler": Rotation.from_matrix(trafo.R).as_euler("xyz"),
+            "sensitivity_number": sensitivity_number,
+        },
+        "used_point_pairs": used_point_pairs,
+        "total_point_pairs": total_point_pairs,
     }
     _broadcast_internal(data)
 

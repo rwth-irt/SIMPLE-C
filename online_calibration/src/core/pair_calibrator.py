@@ -9,6 +9,7 @@ from .frame import Frame
 from .locate_reflector.track_marker import find_marker_single_frame
 from .reflector_location import ReflectorLocation
 from .transformation import Transformation, calc_transformation_scipy, apply_transformation
+from .ws_sender import broadcast_pair_metadata
 
 
 class PairCalibrator:
@@ -147,6 +148,15 @@ class PairCalibrator:
         self.transformation = calc_transformation_scipy(P, Q, weights)
         if self._trafo_callback:
             self._trafo_callback(self.transformation, self.topic1, self.topic2)
+
+        # broadcast to websocket
+        broadcast_pair_metadata(
+            self.topic1,
+            self.topic2,
+            self.transformation,
+            len(Q),
+            len(self.reflector_locations_1)
+        )
 
     def _calculate_weights(self):
         # smaller normal cosine weight for each point pair

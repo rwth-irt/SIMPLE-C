@@ -245,7 +245,7 @@ class OnlineCalibrator(Node):
             if not self.transformations[topic]:
                 continue
             pc = self.pair_calibrators[topic][0]
-            ws_sender.broadcast_metadata(
+            ws_sender.broadcast_sensor_metadata(
                 topic=topic,
                 reflector_locations=pc.reflector_locations_1 if pc.topic1 == topic else pc.reflector_locations_2,
                 transformation=self.transformations[topic]
