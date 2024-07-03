@@ -10,6 +10,7 @@ def get_shortest_pair_paths(pairs: list[list[str]], ref: str) -> dict[str, list[
     :param ref: the reference node
     :return: dictionary with
     """
+    pairs = pairs.copy()  # we remove items in this function
     paths = {
         # from: path to ref
         ref: []

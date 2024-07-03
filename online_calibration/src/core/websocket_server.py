@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import threading
+from typing import Callable
 
 import numpy as np
 import websockets
@@ -123,6 +124,8 @@ async def _on_connection(socket: websockets.WebSocketServerProtocol):
     try:
         logging.info("New client connection")
         async for _message in socket:
+            if _message == "reset" and _reset_callback:
+                _reset_callback()
             pass
         # loop terminates on disconnection
     except websockets.ConnectionClosedOK or websockets.ConnectionClosedError or websockets.ConnectionClosed:
@@ -142,8 +145,17 @@ async def _ws_thread_main():
 # Event loop for ws server
 loop = asyncio.new_event_loop()
 
+# callback when reset message is received
+_reset_callback: Callable[[], None] | None = None
 
-def main():
-    # Start ws server in new Thread
+
+def main(reset_callback: Callable[[], None] | None):
+    """
+    Start Websocket server in a new thread.
+    :return: A function which can be called to stop the server.
+    """
+    global _reset_callback
+    _reset_callback = reset_callback
     t = threading.Thread(target=loop.run_until_complete, args=[_ws_thread_main()])
     t.start()
+    return lambda: loop.stop()  # TODO: apparently, this is not enough to stop the server correctly

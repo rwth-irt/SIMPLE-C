@@ -9,7 +9,7 @@ from .frame import Frame
 from .locate_reflector.track_marker import find_marker_single_frame
 from .reflector_location import ReflectorLocation
 from .transformation import Transformation, calc_transformation_scipy, apply_transformation
-from .ws_sender import broadcast_pair_metadata
+from .websocket_server import broadcast_pair_metadata
 
 
 class PairCalibrator:

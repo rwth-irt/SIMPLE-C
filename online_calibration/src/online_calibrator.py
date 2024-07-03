@@ -5,7 +5,7 @@ from sensor_msgs_py import point_cloud2
 from sensor_msgs_py.numpy_compat import structured_to_unstructured
 
 from . import resolve_trafo_chain
-from .core import parameters, ws_sender
+from .core import parameters, websocket_server
 from .core.frame import Frame
 from .core.pair_calibrator import PairCalibrator
 from .core.transformation import Transformation
@@ -62,13 +62,13 @@ class OnlineCalibrator(Node):
             )
         )
         sensor_pairs_raw = str(self.get_parameter("sensor_pairs").get_parameter_value().string_value)
-        sensor_pairs = [
+        self.sensor_pairs = [
             list(map(str.strip, sp.split(",")))
             for sp in sensor_pairs_raw.split(";")
         ]
-        print(f"Parsed the following sensor pairs: {sensor_pairs}")  # debug/info print
+        print(f"Parsed the following sensor pairs: {self.sensor_pairs}")  # debug/info print
 
-        # ROS parameter "main_sensor"
+        # Get ROS parameter "main_sensor"
         self.declare_parameter(
             name="main_sensor",
             descriptor=ParameterDescriptor(
@@ -79,39 +79,51 @@ class OnlineCalibrator(Node):
         self.main_sensor_topic = str(self.get_parameter("main_sensor").get_parameter_value().string_value.strip())
         print(f"Main sensor is {self.main_sensor_topic}")
 
+        # Resolve transformation chains from given pairs and main sensor
+        self.trafo_chains = resolve_trafo_chain.get_shortest_pair_paths(self.sensor_pairs, self.main_sensor_topic)
+        print(f"Trafo chains: {self.trafo_chains}")
+
+        # Ros Publisher
         self.trafo_publisher = self.create_publisher(TransformStamped, "transformations", 10)
 
-        topics = set()  # collect the topics we have to subscribe to
-        for a, b in sensor_pairs:
-            topics.add(a)
-            topics.add(b)
-        self.transformations: dict[str, Transformation | None] = {
-            t: None for t in topics
-        }
+        # Get all topics we have to subscribe to
+        self.topics = set()  # collect the topics we have to subscribe to
+        for a, b in self.sensor_pairs:
+            self.topics.add(a)
+            self.topics.add(b)
 
-        # a dict which holds a list of interested paircalibrators per topic
-        self.pair_calibrators: dict[str, list[PairCalibrator]] = {
-            topic: [] for topic in topics
-        }
-
-        # initialize ROS node, add publishers and subscribe to sensors
-        for topic in topics:
-            # subscribe to all sensors' ROS topics
-            self.create_subscription(  # (Function inherited from rclpy.Node)
+        # Create ROS subscriptions to relevant topics
+        for topic in self.topics:
+            self.create_subscription(  # (This function is inherited from rclpy.Node)
                 point_cloud2.PointCloud2,
                 topic,
                 lambda pc2, t=topic: self.on_message(t, pc2),
                 10
             )
 
+        print("ROS initialization finished")
+
+        self._init_reset()
+        self.reset = lambda: self._init_reset()  # expose a function to reset this calibrator's data
+
+    def _init_reset(self):
+        # (re)initialize all calibration data related variables
+        print("Initializing new calibration")
+
+        self.transformations: dict[str, Transformation | None] = {
+            t: None for t in self.topics
+        }
+
+        # a dict which holds a list of interested paircalibrators per topic
+        self.pair_calibrators: dict[str, list[PairCalibrator]] = {
+            topic: [] for topic in self.topics
+        }
+
         # create pair calibrators
-        for a, b in sensor_pairs:
+        for a, b in self.sensor_pairs:
             pc = PairCalibrator(a, b, self.new_transformation)
             self.pair_calibrators[a].append(pc)
             self.pair_calibrators[b].append(pc)
-
-        self.trafo_chains = resolve_trafo_chain.get_shortest_pair_paths(sensor_pairs, self.main_sensor_topic)
-        print(f"Trafo chains: {self.trafo_chains}")
 
         print("Waiting for sensor data...")
 
@@ -136,7 +148,7 @@ class OnlineCalibrator(Node):
         t_sec = timestamp_ros.sec + timestamp_ros.nanosec * 1.e-9
 
         frame = Frame(data, t_sec, topic)
-        ws_sender.broadcast_frame(frame)
+        websocket_server.broadcast_frame(frame)
         # pass the new frame to all interested PairCalibrators, which will perform
         # buffering and calculate a transformation if possible
         for pc in self.pair_calibrators[topic]:
@@ -245,7 +257,7 @@ class OnlineCalibrator(Node):
             if not self.transformations[topic]:
                 continue
             pc = self.pair_calibrators[topic][0]
-            ws_sender.broadcast_sensor_metadata(
+            websocket_server.broadcast_sensor_metadata(
                 topic=topic,
                 reflector_locations=pc.reflector_locations_1 if pc.topic1 == topic else pc.reflector_locations_2,
                 transformation=self.transformations[topic]
