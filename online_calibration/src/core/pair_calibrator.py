@@ -9,6 +9,7 @@ from .frame import Frame
 from .locate_reflector.track_marker import find_marker_single_frame
 from .reflector_location import ReflectorLocation
 from .transformation import Transformation, calc_transformation_scipy, apply_transformation
+from .ws_sender import broadcast_pair_metadata
 
 
 class PairCalibrator:
@@ -33,8 +34,8 @@ class PairCalibrator:
 
         self._frame_buffer_1: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
         self._frame_buffer_2: deque[Frame] = deque(maxlen=int(parameters.get_param("window size")))
-        self._topic1 = topic1
-        self._topic2 = topic2
+        self.topic1 = topic1
+        self.topic2 = topic2
         self._last1: Frame | None = None
         self._last2: Frame | None = None
         self.reflector_locations_1: list[ReflectorLocation] = []
@@ -50,21 +51,21 @@ class PairCalibrator:
         :param f: The new frame.
         """
         # store temporarily
-        if f.topic == self._topic1:
+        if f.topic == self.topic1:
             self._last1 = f
         else:
-            assert f.topic == self._topic2
+            assert f.topic == self.topic2
             self._last2 = f
         if self._last1 is None or self._last2 is None:
             return
 
         # check if temporary frames are expired
         if self._last1.timestamp_sec - self._last2.timestamp_sec > self._expiry_duration_sec:
-            print(f"Frame for {self._topic2} expired.")
+            print(f"Frame for {self.topic2} expired.")
             self._last2 = None
             return
         if self._last2.timestamp_sec - self._last1.timestamp_sec > self._expiry_duration_sec:
-            print(f"Frame for {self._topic1} expired.")
+            print(f"Frame for {self.topic1} expired.")
             self._last1 = None
             return
 
@@ -146,7 +147,16 @@ class PairCalibrator:
 
         self.transformation = calc_transformation_scipy(P, Q, weights)
         if self._trafo_callback:
-            self._trafo_callback(self.transformation, self._topic1, self._topic2)
+            self._trafo_callback(self.transformation, self.topic1, self.topic2)
+
+        # broadcast to websocket
+        broadcast_pair_metadata(
+            self.topic1,
+            self.topic2,
+            self.transformation,
+            len(Q),
+            len(self.reflector_locations_1)
+        )
 
     def _calculate_weights(self):
         normal_weight_share = parameters.get_param("normal_cosine_weight_share")
@@ -183,11 +193,10 @@ class PairCalibrator:
                 + number_weight_share * point_number_weights
         )
 
-    def _get_location_filter(self):
+    def _get_location_filter(self) -> np.ndarray:
         """
-        Applies filters based on all reflector locations found yet.
-
-        :return: Filtered version of
+        Returns a filter boolean array of filters for which an initial transformation must be present.
+        Currently, this is only whether the distance between two transformed reflector locations is very large.
         """
         # drop point pairs whose points are comparably far apart from each other
         points1 = np.array([p.centroid for p in self.reflector_locations_1])
