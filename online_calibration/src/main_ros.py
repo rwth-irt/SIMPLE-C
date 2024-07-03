@@ -2,17 +2,18 @@
 import rclpy
 
 from .online_calibrator import OnlineCalibrator
-from .core import ws_sender
+from .core import websocket_server
 
 
 def main(args=None):
-    ws_sender.main()  # start up websocket server in new Thread
     rclpy.init(args=args)
     calibrator = OnlineCalibrator()
+    stop_server = websocket_server.main(calibrator.reset)  # start up websocket server in new Thread
     try:
         rclpy.spin(calibrator)
     except KeyboardInterrupt:
         print("Got KeyboardInterrupt, stopping.")
+    stop_server()
     rclpy.shutdown()
 
 
