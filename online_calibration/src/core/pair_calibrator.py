@@ -129,25 +129,25 @@ class PairCalibrator:
             return
 
         # Recalculate and publish transformation with new data
+        weights = self._calculate_weights()
         P, Q, location_filter = None, None, None
         if self.transformation:
             location_filter = self._get_location_filter()
             if sum(location_filter) > 3:
+                # only filter if at least 3 points will remain after filtering
                 P = np.array([rl.centroid for rl in _filter_list(self.reflector_locations_1, location_filter)])
                 Q = np.array([rl.centroid for rl in _filter_list(self.reflector_locations_2, location_filter)])
+                weights = list(_filter_list(weights, location_filter))
         if P is None:
             # use unfiltered reflector locations until we have enough data
             P = np.array([rl.centroid for rl in self.reflector_locations_1])
             Q = np.array([rl.centroid for rl in self.reflector_locations_2])
+            # weights remains unfiltered as well.
 
         logger.info("Calculating new transformation (using {0} / {1} point pairs)".format(
             str(len(Q)).rjust(3),
             str(len(self.reflector_locations_1)).rjust(3)
         ))
-
-        weights = self._calculate_weights()
-        if location_filter is not None:
-            weights = list(_filter_list(weights, location_filter))
 
         self.transformation = calc_transformation_scipy(P, Q, weights)
         if self._trafo_callback:
