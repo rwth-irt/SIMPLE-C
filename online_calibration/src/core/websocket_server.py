@@ -12,9 +12,9 @@ from .frame import Frame
 from .reflector_location import ReflectorLocation
 from .transformation import Transformation
 
-logging.basicConfig(level=logging.INFO)
-
 _clients: list[websockets.WebSocketServerProtocol] = []
+
+logger = logging.getLogger(__name__)
 
 
 class _NumpyEncoder(json.JSONEncoder):
@@ -122,7 +122,7 @@ async def _broadcast(msg: str):
 async def _on_connection(socket: websockets.WebSocketServerProtocol):
     _clients.append(socket)
     try:
-        logging.info("New client connection")
+        logger.info("New client connection")
         async for _message in socket:
             if _message == "reset" and _reset_callback:
                 _reset_callback()
@@ -132,14 +132,14 @@ async def _on_connection(socket: websockets.WebSocketServerProtocol):
         pass
     finally:
         _clients.remove(socket)
-        logging.info("Client left")
+        logger.info("Client left")
 
 
 async def _ws_thread_main():
     async with websockets.serve(_on_connection, "0.0.0.0", 6789):
-        print("WS server listening")
+        logger.info("WS server listening")
         await asyncio.Future()  # run forever
-    print("WS server stopped")
+    logger.info("WS server stopped")
 
 
 # Event loop for ws server
