@@ -1,3 +1,5 @@
+import logging
+
 from geometry_msgs.msg import TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from rclpy.node import Node
@@ -9,6 +11,8 @@ from .core import parameters, websocket_server
 from .core.frame import Frame
 from .core.pair_calibrator import PairCalibrator
 from .core.transformation import Transformation
+
+logger = logging.getLogger(__name__)
 
 
 def get_numpy_from_pc2(pc2: point_cloud2.PointCloud2, field_names: list[str]):
@@ -66,7 +70,7 @@ class OnlineCalibrator(Node):
             list(map(str.strip, sp.split(",")))
             for sp in sensor_pairs_raw.split(";")
         ]
-        print(f"Parsed the following sensor pairs: {self.sensor_pairs}")  # debug/info print
+        logger.info(f"Parsed the following sensor pairs: {self.sensor_pairs}")  # debug/info print
 
         # Get ROS parameter "main_sensor"
         self.declare_parameter(
@@ -77,11 +81,11 @@ class OnlineCalibrator(Node):
             )
         )
         self.main_sensor_topic = str(self.get_parameter("main_sensor").get_parameter_value().string_value.strip())
-        print(f"Main sensor is {self.main_sensor_topic}")
+        logger.info(f"Main sensor is {self.main_sensor_topic}")
 
         # Resolve transformation chains from given pairs and main sensor
         self.trafo_chains = resolve_trafo_chain.get_shortest_pair_paths(self.sensor_pairs, self.main_sensor_topic)
-        print(f"Trafo chains: {self.trafo_chains}")
+        logger.info(f"Trafo chains: {self.trafo_chains}")
 
         # Ros Publisher
         self.trafo_publisher = self.create_publisher(TransformStamped, "transformations", 10)
@@ -101,14 +105,14 @@ class OnlineCalibrator(Node):
                 10
             )
 
-        print("ROS initialization finished")
+        logger.info("ROS initialization finished")
 
         self._init_reset()
         self.reset = lambda: self._init_reset()  # expose a function to reset this calibrator's data
 
     def _init_reset(self):
         # (re)initialize all calibration data related variables
-        print("Initializing new calibration")
+        logger.info("Initializing new calibration")
 
         self.transformations: dict[str, Transformation | None] = {
             t: None for t in self.topics
@@ -125,7 +129,7 @@ class OnlineCalibrator(Node):
             self.pair_calibrators[a].append(pc)
             self.pair_calibrators[b].append(pc)
 
-        print("Waiting for sensor data...")
+        logger.info("Waiting for sensor data...")
 
     def on_message(self, topic: str, pc2: point_cloud2.PointCloud2):
         """
@@ -164,12 +168,12 @@ class OnlineCalibrator(Node):
         :param Q_topic: the name of the "Q" frame (see `transformation.py` for explanation)
         :return:
         """
-        print(f"New transformation for '{P_topic}' --> '{Q_topic}':\nR=")
-        print(trafo.R)
-        print("t =")
-        print(trafo.t)
-        print("sensitivity matrix for rotation =")
-        print(trafo.R_sensitivity)
+        logger.info(f"New transformation for '{P_topic}' --> '{Q_topic}':\nR=")
+        logger.info(trafo.R)
+        logger.info("t =")
+        logger.info(trafo.t)
+        logger.info("sensitivity matrix for rotation =")
+        logger.info(trafo.R_sensitivity)
 
         # Publish in ROS
         # Adapted from http://docs.ros.org/en/humble/Tutorials/Intermediate/Tf2/Writing-A-Tf2-Broadcaster-Py.html

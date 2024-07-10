@@ -1,4 +1,5 @@
 import argparse
+import logging
 import pathlib
 import sys
 from collections import deque
@@ -12,6 +13,8 @@ from .visualization.trafo_visualization import visualize_trafo
 from ..core import parameters
 from ..core.pair_calibrator import PairCalibrator
 from ..core.transformation import apply_transformation
+
+logger = logging.getLogger(__name__)
 
 
 def main():
@@ -47,13 +50,13 @@ def main():
         sys.exit()
 
     if (args.visualize_tracking and args.transformation) or (not args.visualize_tracking and not args.transformation):
-        print("Please choose either '--visualize-tracking' or '--transformation'.")
+        logger.warning("Please choose either '--visualize-tracking' or '--transformation'.")
         sys.exit(1)
 
     # load parameters (do this first because loading data might take long)
     if args.param_file:
         if not pathlib.Path(args.param_file).is_file():
-            print("Could not find given parameter file! Omit option to use defaults. Aborting.")
+            logger.warning("Could not find given parameter file! Omit option to use defaults. Aborting.")
             sys.exit(1)
         paramfile = args.param_file
     else:
@@ -69,14 +72,14 @@ def main():
     if args.transformation:
         topics = list(map(str.strip, args.transformation.split(",")))
         if len(topics) != 2:
-            print("Must specify exactly two topics for transformation calculation. Aborting.")
+            logger.warning("Must specify exactly two topics for transformation calculation. Aborting.")
             sys.exit(1)
     assert topics is not None
 
     if not pathlib.Path(args.rosbag).is_file():
-        print("Given rosbag file does not exist, aborting.")
+        logger.warning("Given rosbag file does not exist, aborting.")
         sys.exit(1)
-    print(f"Processing rosbag file {pathlib.Path(args.rosbag).name}")
+    logger.info(f"Processing rosbag file {pathlib.Path(args.rosbag).name}")
 
     frames = get_frames_from_rosbag(args.rosbag, topics)
 
@@ -88,18 +91,18 @@ def main():
 
 def transformation(frames, topics, args):
     pc = PairCalibrator(topics[0], topics[1], None)
-    print("Searching for reflector location in frames...")
+    logger.info("Searching for reflector location in frames...")
     for f in frames:
         pc.new_frame(f)
-    print(f"Found {len(pc.reflector_locations_1)} point pairs.")
+    logger.info(f"Found {len(pc.reflector_locations_1)} point pairs.")
     if not pc.transformation:
         return
-    print("Transformation result:\nR=")
-    print(pc.transformation.R)
-    print("t =")
-    print(pc.transformation.t)
-    print("sensitivity matrix for rotation =")
-    print(pc.transformation.R_sensitivity)
+    logger.info("Transformation result:\nR=")
+    logger.info(pc.transformation.R)
+    logger.info("t =")
+    logger.info(pc.transformation.t)
+    logger.info("sensitivity matrix for rotation =")
+    logger.info(pc.transformation.R_sensitivity)
 
     # Visualizations based on transformed reflector locations
     points1 = np.array([p.centroid for p in pc.reflector_locations_1])
