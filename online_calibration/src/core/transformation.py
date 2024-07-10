@@ -101,7 +101,7 @@ def calc_transformation_scipy(P: np.ndarray, Q: np.ndarray, weights: np.ndarray 
     :param weights: Optional weights (if None, all points are weighted equally). Numpy array of shape (N).
     :return: An instance of the Transformation dataclass.
     """
-    assert len(P) == len(Q)
+    assert len(P) == len(Q) == len(weights)
     # !!! Q, P flipped compared to own implementation!
 
     # calculate weighted mean of each set of points
