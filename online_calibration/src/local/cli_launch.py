@@ -16,6 +16,19 @@ from ..core.transformation import apply_transformation
 
 logger = logging.getLogger(__name__)
 
+# save log info to log-file
+file_handler = logging.FileHandler('transformations.log')
+file_handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
+# ouput log info to console
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Multi-Lidar alignment calibration")

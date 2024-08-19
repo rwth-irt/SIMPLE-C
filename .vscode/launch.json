@@ -8,16 +8,16 @@
             "name": "clustering",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/main_cli.py",
+            "program": "${workspaceFolder}/online_calibration/main_cli.py",
             "console": "integratedTerminal",
-            "args": ["--rosbag", "/home/timrehbronn/Desktop/validation_outside_try/validation_Measurement_Target_1.bag", "--transformation", "/rslidar_points_r,/rslidar_points_l"]
+            "args": ["--rosbag", "/home/timrehbronn/Documents/Data/validation_outside_try/validation_Measurement_Target_1.bag", "--transformation", "/rslidar_points_r,/rslidar_points_l"]
         }
     ,
         {
             "name": "clustering_vis",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/main_cli.py",
+            "program": "${workspaceFolder}/online_calibration/main_cli.py",
             "console": "integratedTerminal",
             "args": ["--rosbag", "/home/timrehbronn/Desktop/validation_outside_try/validation_Measurement_Target_1.bag", "--transformation", "/rslidar_points_r,/rslidar_points_l", "--visualize-tracking", "/rslidar_points_l", "--visualize-trafo"]
         }

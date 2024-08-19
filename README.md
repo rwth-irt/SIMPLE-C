@@ -24,6 +24,7 @@ The ros node will then listen to PointCloud2 messages on the provided topics and
 
 - Using the script `online_calibration/main_cli.py`, the calibration can be used without ROS (pass `--help` for usage information) by importing ROS-bags as numpy arrays.
 - Reading rosbag data is used using separate libraries.
+- Currently only reading ROS1 bags is supported
 - Visualizations of reflector tracking and point pair alignment are available, which are not available inside of ROS.
 - As rosbag import is very slow, it might be faster to run the ROS node and play back the rosbag using ROS itself as long as no visualization is required.
 
