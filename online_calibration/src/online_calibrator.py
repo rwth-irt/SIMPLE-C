@@ -1,18 +1,18 @@
 import logging
+import os
 
 from geometry_msgs.msg import TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from rclpy.node import Node
 from sensor_msgs_py import point_cloud2
 from sensor_msgs_py.numpy_compat import structured_to_unstructured
+from std_srvs.srv import Trigger  # Importieren des Service-Typs
 
 from . import resolve_trafo_chain
 from .core import parameters, websocket_server
 from .core.frame import Frame
 from .core.pair_calibrator import PairCalibrator
 from .core.transformation import Transformation
-
-logger = logging.getLogger(__name__)
 
 
 def get_numpy_from_pc2(pc2: point_cloud2.PointCloud2, field_names: list[str]):
@@ -70,7 +70,39 @@ class OnlineCalibrator(Node):
             list(map(str.strip, sp.split(",")))
             for sp in sensor_pairs_raw.split(";")
         ]
-        logger.info(f"Parsed the following sensor pairs: {self.sensor_pairs}")  # debug/info print
+
+        # Get the log directory path from ROS argument (if provided)
+        log_dir_parameter = self.get_parameter("log_path")
+        log_dir = str(log_dir_parameter.get_parameter_value().string_value)
+
+        try:
+            # Check if the default log directory exists, if not, create it
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir)
+        except Exception as e:
+            raise Exception("log_dir is not correct", log_dir)
+
+        log_file_path = os.path.join(log_dir, 'transformations.log')
+
+        # init logger
+        self.logger = logging.getLogger(__name__)
+
+        self.logger.info(f"Log-File saved at: {log_file_path}")
+
+        # save log info to log-file
+        file_handler = logging.FileHandler(log_file_path)
+        file_handler.setLevel(logging.INFO)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        self.logger.addHandler(file_handler)
+
+        # ouput log info to console
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(formatter)
+        self.logger.addHandler(console_handler)
+
+        self.logger.info(f"Parsed the following sensor pairs: {self.sensor_pairs}")  # debug/info print
 
         # Get ROS parameter "main_sensor"
         self.declare_parameter(
@@ -81,14 +113,23 @@ class OnlineCalibrator(Node):
             )
         )
         self.main_sensor_topic = str(self.get_parameter("main_sensor").get_parameter_value().string_value.strip())
-        logger.info(f"Main sensor is {self.main_sensor_topic}")
+        self.logger.info(f"Main sensor is {self.main_sensor_topic}")
 
         # Resolve transformation chains from given pairs and main sensor
         self.trafo_chains = resolve_trafo_chain.get_shortest_pair_paths(self.sensor_pairs, self.main_sensor_topic)
-        logger.info(f"Trafo chains: {self.trafo_chains}")
+        self.logger.info(f"Trafo chains: {self.trafo_chains}")
 
         # Ros Publisher
         self.trafo_publisher = self.create_publisher(TransformStamped, "transformations", 10)
+
+        # Ros Service Server (Trigger service to send the latest transformation)
+        self.service = self.create_service(
+            Trigger, 'send_latest_transformation',
+            self.handle_send_latest_transformation
+        )
+
+        # Initialize latest transformation variable
+        self.latest_transformation = None
 
         # Get all topics we have to subscribe to
         self.topics = set()  # collect the topics we have to subscribe to
@@ -105,14 +146,14 @@ class OnlineCalibrator(Node):
                 10
             )
 
-        logger.info("ROS initialization finished")
+        self.logger.info("ROS initialization finished")
 
         self._init_reset()
         self.reset = lambda: self._init_reset()  # expose a function to reset this calibrator's data
 
     def _init_reset(self):
         # (re)initialize all calibration data related variables
-        logger.info("Initializing new calibration")
+        self.logger.info("Initializing new calibration")
 
         self.transformations: dict[str, Transformation | None] = {
             t: None for t in self.topics
@@ -129,7 +170,7 @@ class OnlineCalibrator(Node):
             self.pair_calibrators[a].append(pc)
             self.pair_calibrators[b].append(pc)
 
-        logger.info("Waiting for sensor data...")
+        self.logger.info("Waiting for sensor data...")
 
     def on_message(self, topic: str, pc2: point_cloud2.PointCloud2):
         """
@@ -168,12 +209,12 @@ class OnlineCalibrator(Node):
         :param Q_topic: the name of the "Q" frame (see `transformation.py` for explanation)
         :return:
         """
-        logger.info(f"New transformation for '{P_topic}' --> '{Q_topic}':\nR=")
-        logger.info(trafo.R)
-        logger.info("t =")
-        logger.info(trafo.t)
-        logger.info("sensitivity matrix for rotation =")
-        logger.info(trafo.R_sensitivity)
+        self.logger.info(f"New transformation for '{P_topic}' --> '{Q_topic}':\nR=\n")
+        self.logger.info(trafo.R)
+        self.logger.info("t =\n")
+        self.logger.info(trafo.t)
+        self.logger.info("sensitivity matrix for rotation =\n")
+        self.logger.info(trafo.R_sensitivity)
 
         # Publish in ROS
         # Adapted from http://docs.ros.org/en/humble/Tutorials/Intermediate/Tf2/Writing-A-Tf2-Broadcaster-Py.html
@@ -190,6 +231,8 @@ class OnlineCalibrator(Node):
         t.transform.rotation.z = trafo.R_quat[2]
         t.transform.rotation.w = trafo.R_quat[3]
         self.trafo_publisher.publish(t)
+
+        self.latest_transformation = t
 
         self._update_transformations()
         self._broadcast_websocket()
@@ -266,3 +309,18 @@ class OnlineCalibrator(Node):
                 reflector_locations=pc.reflector_locations_1 if pc.topic1 == topic else pc.reflector_locations_2,
                 transformation=self.transformations[topic]
             )
+
+    def handle_send_latest_transformation(self, request, response):
+        if self.latest_transformation is None:
+            response.success = False
+            response.message = 'No transformation has been published yet.'
+        else:
+            try:
+                msg = self.latest_transformation
+                response.success = True
+                response.message = f'Successfully sent latest transformation \n{msg}'
+                return response
+            except Exception as e:
+                response.success = False
+                response.message = f'Error sending latest transformation \n{str(e)}'
+                return response

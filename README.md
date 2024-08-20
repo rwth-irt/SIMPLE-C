@@ -1,14 +1,16 @@
-# TraBaDyFiCa
+# SIMPLEX
+##  Uncertainty-aware Multi-LiDAR Extrinsic Calibration using a Simple Dynamic Target in Moving Feature-Sparse Environments
 
-> Trajectory Based Dynamic Filtering for Calibration
+This calibration tool can be used for calibrating multiple LiDAR sensors using a simple reflective target that is moved through the environment while being tracked. The tool was created to allow for pairwise calibration of LiDAR sensors on large vessels. The vessel is docked on the water introducing a unintendedly moving sensor platform and a moving environment (water surface), meaning that we cannot use any feature- or environment-based calibration algorithm. Also, we cannot use static targets as they would constantly move on the water surface. Further, as large vessels are often expensive to move, we created a tool that does not require any movement of the platform to calibrate sensors. We also omit the use of external auxiliary sensors such as IMU or GNSS, the need to manufacture complex shaped targets or algorithms that rely on geometric shape detection and calculation. Our calibration tool can be used indoor, outdoor and on waterside making the tool available for many users, applications and environments. Additionally, the tool is online-capable such that live feedback can be used to optimize the calibration procedure or parameters. For point cloud registration we rely on a simple weighted Kabsch Algorithm.
 
-This program determines the coordinate transformation (translation and rotation) to join the point clouds of pairs of Lidar sensors. This is accomplished by detecting a reflective object which is moved in an overlapping area of the field of view of both sensors. The trajectories of the tracked reflector are then aligned using the *Kabsch algorithm*.
+We demonstrate a robust and simple online calibration tool for LiDAR sensors in maritime applications.
+
 
 ## Running the calibration
 
 **Online calibration in ROS/Docker**:
 
-To run in a docker container with all dependencies installed, the ROS package built and everything from ROS properly  sourced (this is all ensured when using the docker image built from the definitions in the [docker repository](https://git-ce.rwth-aachen.de/g-nav-mob-irt/projects/galileonautic2plus/calibration/robosense_docker), run the following command:
+To run in a docker container with all dependencies installed, the ROS package built and everything from ROS properly  sourced (this is all ensured when using the docker image built from the definitions in the [docker repository](https://git-ce.rwth-aachen.de/g-nav-mob-irt/projects/galileonautic2plus/calibration/robosense_docker)), run the following command:
 
 `ros2 run online_calibration main --ros-args --params-file /PATH/TO/parameters.yaml -p sensor_pairs:="<PAIRS>"`
 
@@ -18,13 +20,17 @@ Replace `<PAIRS>` with a sensor pair definition using the following syntax: `top
 
 The ros node will then listen to PointCloud2 messages on the provided topics and push calibrations to the topic `transformations`. Status information is currently (**TODO**) provided on stdout (command line of the ros node).  All transformations use the message type `TransformStamped`, which includes information about the involved coordinate frames (here: sensor topic names). Therefore, transformations for multiple sensor can be pushed to the same ROS topic.
 
-**Running without ROS from rosbag data**
+To run the calibration tool online on already captured data from ROS bags, you can simply play back the ROS bags in the docker container and run the calibration tool simultaneously to get the calibration parameters.
 
-- Using the script `online_calibration/main_ros.py`, the calibration can be used without ROS (pass `--help` for usage information).
+
+**Offline calibration (Debug Mode)**
+
+- Using the script `online_calibration/main_cli.py`, the calibration can be used without ROS (pass `--help` for usage information) by importing ROS-bags as numpy arrays.
 - Reading rosbag data is used using separate libraries.
-- Only a single detector pair is supported.
+- Currently only reading ROS1 bags is supported (if you want to use ROS2 bags, you can use the online tool without debug purpose)
 - Visualizations of reflector tracking and point pair alignment are available, which are not available inside of ROS.
 - As rosbag import is very slow, it might be faster to run the ROS node and play back the rosbag using ROS itself as long as no visualization is required.
+
 
 ## Code structure
 - All code lives inside the `src` directory in the ROS package `online_calibration`. 

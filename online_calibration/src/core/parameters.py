@@ -5,6 +5,7 @@ logger = logging.getLogger(__name__)
 _params: None | dict = None  # uninitialized
 
 parameter_definitions = {
+    "log_path": "string",
     "relative intensity threshold": "float",
     "DBSCAN epsilon": "float",
     "DBSCAN min samples": "int",
