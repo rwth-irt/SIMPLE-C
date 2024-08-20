@@ -7,7 +7,6 @@ from sensor_msgs_py import point_cloud2
 from sensor_msgs_py.numpy_compat import structured_to_unstructured
 from std_srvs.srv import Trigger  # Importieren des Service-Typs
 
-
 from . import resolve_trafo_chain
 from .core import parameters, websocket_server
 from .core.frame import Frame
@@ -106,7 +105,10 @@ class OnlineCalibrator(Node):
         self.trafo_publisher = self.create_publisher(TransformStamped, "transformations", 10)
 
         # Ros Service Server (Trigger service to send the latest transformation)
-        self.service = self.create_service(Trigger, 'send_latest_transformation', self.handle_send_latest_transformation)
+        self.service = self.create_service(
+            Trigger, 'send_latest_transformation',
+            self.handle_send_latest_transformation
+        )
 
         # Initialize latest transformation variable
         self.latest_transformation = None
@@ -212,7 +214,7 @@ class OnlineCalibrator(Node):
         t.transform.rotation.w = trafo.R_quat[3]
         self.trafo_publisher.publish(t)
 
-        self.latest_transformation=t
+        self.latest_transformation = t
 
         self._update_transformations()
         self._broadcast_websocket()
@@ -290,18 +292,17 @@ class OnlineCalibrator(Node):
                 transformation=self.transformations[topic]
             )
 
-    
     def handle_send_latest_transformation(self, request, response):
-        if not hasattr(self,'latest_transformation') or not isinstance(self.latest_transformation ,TransformStamped):
-            response.success=False  
-            response.message='No transformation has been published yet.'
+        if self.latest_transformation is None:
+            response.success = False
+            response.message = 'No transformation has been published yet.'
         else:
             try:
-                msg=self.latest_transformation 
-                response.success=True  
-                response.message=f'Successfully sent latest transformation \n{msg}'
-                return response 
+                msg = self.latest_transformation
+                response.success = True
+                response.message = f'Successfully sent latest transformation \n{msg}'
+                return response
             except Exception as e:
-                response.success=False  
-                response.message=f'Error sending latest transformation \n{str(e)}'
-                return response 
+                response.success = False
+                response.message = f'Error sending latest transformation \n{str(e)}'
+                return response
