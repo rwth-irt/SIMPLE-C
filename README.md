@@ -27,7 +27,7 @@ To run the calibration tool online on already captured data from ROS bags, you c
 
 - Using the script `online_calibration/main_cli.py`, the calibration can be used without ROS (pass `--help` for usage information) by importing ROS-bags as numpy arrays.
 - Reading rosbag data is used using separate libraries.
-- Currently only reading ROS1 bags is supported
+- Currently only reading ROS1 bags is supported (if you want to use ROS2 bags, you can use the online tool without debug purpose)
 - Visualizations of reflector tracking and point pair alignment are available, which are not available inside of ROS.
 - As rosbag import is very slow, it might be faster to run the ROS node and play back the rosbag using ROS itself as long as no visualization is required.
 
