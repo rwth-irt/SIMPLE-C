@@ -16,7 +16,7 @@ To run in a docker container with all dependencies installed, the ROS package bu
 
 The `/PATH/TO/parameters.yaml` must be the path **inside** the docker container! Make sure that the parameter file is somehow accessible inside the docker container for ROS to read it. (As the source code of this ROS package contains it, it has probably already been copied to docker.)
 
-Replace `<PAIRS>` with a sensor pair definition using the following syntax: `topicA,topicB;topicB,topicC`. Pairs are separated using semicolons, in a single pair, the two sensors are comma-separated.
+Replace `<PAIRS>` with a sensor pair definition using the following syntax: `topicChild,topicParent;topicChild,topicParent`. Pairs are separated using semicolons, in a single pair, the two sensors are comma-separated.
 
 The ros node will then listen to PointCloud2 messages on the provided topics and push calibrations to the topic `transformations`. Status information is currently (**TODO**) provided on stdout (command line of the ros node).  All transformations use the message type `TransformStamped`, which includes information about the involved coordinate frames (here: sensor topic names). Therefore, transformations for multiple sensor can be pushed to the same ROS topic.
 
