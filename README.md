@@ -72,8 +72,13 @@ To differentiate between the reflector and static reflective objects (or almost 
 
 6. As soon as an initial transformation exists, further filtering is applied to remove outliers that might have passed all filters described in step 3. To accomplish this, all point pairs of one sensor are transformed, which should ideally result in perfectly aligned point clouds. The mean distance between two adjacent points (after transformation) is calculated and point pairs with a much greater distance (`mean_distance * "outlier_mean_factor"`) are excluded before the transformation is calculated.
 
-7. The Kabsch algorithm accepts weights for each point pair. This weight is composed of multiple weights (whose influence can be adjusted individually):
-   - The number of points in the cluster, divided by the maximum number of all clusters identified as the reflector.
-   - The cosine similarity of the normal vector of the reflector surface and the vector from sensor (in the origin) to the cluster centroid. The normal vector is calculated using an SVD, assuming the points to be distributed approximately planar. This follows the assumption that the position of the reflector's center can be calculated more accurately if the reflector surface points directly towards the sensor.
+7. The Kabsch algorithm accepts weights for each point pair. This allows for using weights to consider uncertainty or an indicator of the targets relaibility for calibration purposes. This weight is composed of three subweights:
+   - **Assumption**: The more points there are in a valid cluster, the more reliable is the estimation of the target center. 
+      - **Weight** $w_1$: The number of points in the cluster, divided by the maximum number of all clusters identified as the reflector.
+   - **Assumption**: The position of the reflector's center can be calculated more accurately if the reflector surface points are faced directly towards the sensor.
+      - **Weight** $w_2$: The cosine similarity of the normal vector of the reflector surface and the vector from sensor (in the origin) to the cluster centroid. The normal vector is calculated using an SVD, assuming the points to be distributed approximately planar. 
+   - **Assumption**: As the sensor outputs *x, y, z* coordinates but measures radial distance *r*, there is a range dependent error or uncertainty in the coordinates.
+      - **Weight** $w_3$: The weight is inversely proportional to the squared radial distance to the sensors origin. The further away the measurement is, the higher the uncertainty and the lower the weight.
+   - **Combined Weight**: Multiplicative linkage of the subweights to avoid further hyperparameters and induce an AND-logic to the weights. $w = w_1 * w_2 * w_3$ The weights can individually be turned on/off.
 
-   Note that the algorithm only accepts a *single* weight per point *pair*, not per point. Therefore, the minimum of the points in a pair is used.
+   Note that the algorithm only accepts a *single* weight per point *pair*, not per point. Therefore, the minimum weight of the points in a pair is used.

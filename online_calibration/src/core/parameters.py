@@ -11,8 +11,9 @@ parameter_definitions = {
     "sample_rate_Hz": "float",
     "outlier_mean_factor": "float",
     "max_point_number_change_ratio": "float",
-    "normal_cosine_weight_share": "float",
-    "point_number_weight_share": "float",
+    "normal_cosine_weight": "int",
+    "point_number_weight": "int",
+    "gaussian_range_weight": "int",
 }
 
 

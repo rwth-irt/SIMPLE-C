@@ -159,38 +159,61 @@ class PairCalibrator:
         )
 
     def _calculate_weights(self):
-        normal_weight_share = parameters.get_param("normal_cosine_weight_share")
-        number_weight_share = parameters.get_param("point_number_weight_share")
-        if normal_weight_share == 0 and number_weight_share == 0:
-            # both weights were disabled, use unity weights
+        normal_weight = parameters.get_param("normal_cosine_weight")
+        number_weight = parameters.get_param("point_number_weight")
+        gaussian_weight = parameters.get_param("gaussian_range_weight")
+
+        if normal_weight == 0 and number_weight == 0 and gaussian_weight == 0:
+            # use unity weights if no subweights are used
             return np.ones((len(self.reflector_locations_1)))
+        
+        if normal_weight == 0:
+            # use unity weights if normal weight is not used
+            normal_cosine_weights = np.ones((len(self.reflector_locations_1)))
+        else:
+            # normal cosine weight for each point pair (choose smaller value per pair)
+            normal_cosine_weights = np.min(
+                np.stack((
+                    [rl.normal_cosine_weight for rl in self.reflector_locations_1],
+                    [rl.normal_cosine_weight for rl in self.reflector_locations_2]
+                )),
+                axis=0
+            )
+        
+        if number_weight == 0:
+            # use unity weights if number weight is not used
+            point_number_weights = np.ones((len(self.reflector_locations_1)))
+        else:
+            # weight from number of points in cluster
+            max_points_in_cluster = np.max(
+                [rl.number_of_points_in_cluster for rl in self.reflector_locations_1] +
+                [rl.number_of_points_in_cluster for rl in self.reflector_locations_2]
+            )  # number of points in biggest cluster of all sensor's frames combined
 
-        # normal cosine weight for each point pair (choose smaller value per pair)
-        normal_cosine_weights = np.min(
-            np.stack((
-                [rl.normal_cosine_weight for rl in self.reflector_locations_1],
-                [rl.normal_cosine_weight for rl in self.reflector_locations_2]
-            )),
-            axis=0
-        )
+            point_number_weights = np.min(
+                np.stack((
+                    [rl.number_of_points_in_cluster / max_points_in_cluster for rl in self.reflector_locations_1],
+                    [rl.number_of_points_in_cluster / max_points_in_cluster for rl in self.reflector_locations_2]
+                )),
+                axis=0
+            )  # weight number in each cluster relative to maximum, choose smaller value per pair
+        
+        if gaussian_weight == 0:
+            # use unity weights if gaussian range weight is not used
+            gaussian_range_weights = np.ones((len(self.reflector_locations_1)))
+        else:
+            # weight for gaussian range uncertainty, take lowest weight (maximum range)
+            gaussian_range_weights = np.min(
+                np.stack((
+                    [rl.gaussian_range_weight for rl in self.reflector_locations_1],
+                    [rl.gaussian_range_weight for rl in self.reflector_locations_2]
+                )),
+                axis=0
+            )
 
-        # weight from number of points in cluster
-        max_points_in_cluster = np.max(
-            [rl.number_of_points_in_cluster for rl in self.reflector_locations_1] +
-            [rl.number_of_points_in_cluster for rl in self.reflector_locations_2]
-        )  # number of points in biggest cluster of all sensor's frames combined
-
-        point_number_weights = np.min(
-            np.stack((
-                [rl.number_of_points_in_cluster / max_points_in_cluster for rl in self.reflector_locations_1],
-                [rl.number_of_points_in_cluster / max_points_in_cluster for rl in self.reflector_locations_2]
-            )),
-            axis=0
-        )  # weight number in each cluster relative to maximum, choose smaller value per pair
-
+        # link the subweights via multiplication
         return (
-                + normal_weight_share * normal_cosine_weights
-                + number_weight_share * point_number_weights
+                  normal_cosine_weights * point_number_weights * gaussian_range_weights
         )
 
     def _get_location_filter(self) -> np.ndarray:
