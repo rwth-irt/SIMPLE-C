@@ -1,4 +1,5 @@
 import itertools
+import logging
 from collections import deque
 from typing import Callable, Iterable
 
@@ -9,7 +10,9 @@ from .frame import Frame
 from .locate_reflector.track_marker import find_marker_single_frame
 from .reflector_location import ReflectorLocation
 from .transformation import Transformation, calc_transformation_scipy, apply_transformation
-from .ws_sender import broadcast_pair_metadata
+from .websocket_server import broadcast_pair_metadata
+
+logger = logging.getLogger(__name__)
 
 
 class PairCalibrator:
@@ -61,11 +64,11 @@ class PairCalibrator:
 
         # check if temporary frames are expired
         if self._last1.timestamp_sec - self._last2.timestamp_sec > self._expiry_duration_sec:
-            print(f"Frame for {self.topic2} expired.")
+            logger.info(f"Frame for {self.topic2} expired.")
             self._last2 = None
             return
         if self._last2.timestamp_sec - self._last1.timestamp_sec > self._expiry_duration_sec:
-            print(f"Frame for {self.topic1} expired.")
+            logger.info(f"Frame for {self.topic1} expired.")
             self._last1 = None
             return
 
@@ -108,42 +111,43 @@ class PairCalibrator:
         # TODO do something with the status field...
 
         # TODO use some logging system, remove those debug prints
-        # print(f"{' ' * 20} status1: {str(status1).ljust(20)} status2: {str(status2).ljust(20)}")
+        # logger.info(f"{' ' * 20} status1: {str(status1).ljust(20)} status2: {str(status2).ljust(20)}")
 
         if reflector1 is None or reflector2 is None:
             # Only continue if reflector is found in both new frames
+            logger.debug("New frame pair, reflector NOT found in both frames")
             return
 
-        print("Reflector found in both frames")
+        logger.info("New frame pair, reflector found in both frames")
         # Save the obtained reflector locations
         self.reflector_locations_1.append(reflector1)
         self.reflector_locations_2.append(reflector2)
 
         if len(self.reflector_locations_1) < 3:
             # we need at least 3 point pairs
-            print("Not enough point pairs yet")
+            logger.info("Not enough point pairs yet")
             return
 
         # Recalculate and publish transformation with new data
+        weights = self._calculate_weights()
         P, Q, location_filter = None, None, None
         if self.transformation:
             location_filter = self._get_location_filter()
             if sum(location_filter) > 3:
+                # only filter if at least 3 points will remain after filtering
                 P = np.array([rl.centroid for rl in _filter_list(self.reflector_locations_1, location_filter)])
                 Q = np.array([rl.centroid for rl in _filter_list(self.reflector_locations_2, location_filter)])
+                weights = list(_filter_list(weights, location_filter))
         if P is None:
             # use unfiltered reflector locations until we have enough data
             P = np.array([rl.centroid for rl in self.reflector_locations_1])
             Q = np.array([rl.centroid for rl in self.reflector_locations_2])
+            # weights remains unfiltered as well.
 
-        print("Calculating new transformation (using {0} / {1} point pairs)".format(
+        logger.info("Calculating new transformation (using {0} / {1} point pairs)".format(
             str(len(Q)).rjust(3),
             str(len(self.reflector_locations_1)).rjust(3)
         ))
-
-        weights = self._calculate_weights()
-        if location_filter is not None:
-            weights = list(_filter_list(weights, location_filter))
 
         self.transformation = calc_transformation_scipy(P, Q, weights)
         if self._trafo_callback:

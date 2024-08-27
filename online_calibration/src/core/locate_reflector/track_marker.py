@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 
 
@@ -125,7 +127,11 @@ def find_marker_single_frame(
         enumerated
     )
 
-    enumerated = list(enumerated)
+    with warnings.catch_warnings():
+        # Evaluating the filters may result in np.mean() of an empty slice, which results in
+        # annoying RuntimeWarnings. We ignore these for this line.
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        enumerated = list(enumerated)
     if len(enumerated) == 0:
         # did not find unique solution
         return None, "NO_MATCH"

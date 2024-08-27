@@ -1,6 +1,11 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 _params: None | dict = None  # uninitialized
 
 parameter_definitions = {
+    "log_path": "string",
     "relative intensity threshold": "float",
     "DBSCAN epsilon": "float",
     "DBSCAN min samples": "int",
@@ -73,7 +78,7 @@ def init_from_rosnode(rosnode):
                 _params[name] = str(rosnode.get_parameter(name).get_parameter_value().string_value)
             else:
                 raise Exception(f"Parameter type '{typeinfo}' not yet implemented!")
-            print(f"Loaded parameter '{name}': {_params[name]}")
+            logger.info(f"Loaded parameter '{name}': {_params[name]}")
         except Exception as e:
             raise Exception(f"Could not obtain parameter '{name}' from ROS") from e
 
