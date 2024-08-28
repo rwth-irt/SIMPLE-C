@@ -16,12 +16,15 @@ To run in a docker container with all dependencies installed, the ROS package bu
 
 The `/PATH/TO/parameters.yaml` must be the path **inside** the docker container! Make sure that the parameter file is somehow accessible inside the docker container for ROS to read it. (As the source code of this ROS package contains it, it has probably already been copied to docker.)
 
-Replace `<PAIRS>` with a sensor pair definition using the following syntax: `topicA,topicB;topicB,topicC`. Pairs are separated using semicolons, in a single pair, the two sensors are comma-separated.
+Replace `<PAIRS>` with a sensor pair definition using the following syntax: `topicA,topicB;topicB,topicC`. Pairs are separated using semicolons, in a single pair, the two sensors are comma-separated. The first topic called is the child topic and the second the parent topic. Calibration finds the transformation from parent to child.
 
 The ros node will then listen to PointCloud2 messages on the provided topics and push calibrations to the topic `transformations`. Status information is currently (**TODO**) provided on stdout (command line of the ros node).  All transformations use the message type `TransformStamped`, which includes information about the involved coordinate frames (here: sensor topic names). Therefore, transformations for multiple sensor can be pushed to the same ROS topic.
 
 To run the calibration tool online on already captured data from ROS bags, you can simply play back the ROS bags in the docker container and run the calibration tool simultaneously to get the calibration parameters.
 
+You can find a web-based visualization in [this repo](https://git-ce.rwth-aachen.de/g-nav-mob-irt/projects/galileonautic2plus/calibration/web_visualization) and call it via `localhost:8000`
+
+The transformations will be stored in `transformations.log` at `"log_path": "/DATA/log_files"` as set in the default parameters or launch file.
 
 **Offline calibration (Debug Mode)**
 
@@ -31,6 +34,8 @@ To run the calibration tool online on already captured data from ROS bags, you c
 - Visualizations of reflector tracking and point pair alignment are available, which are not available inside of ROS.
 - As rosbag import is very slow, it might be faster to run the ROS node and play back the rosbag using ROS itself as long as no visualization is required.
 
+**Using the Calibration**
+The transformation computed by the calibration module is stored in `transformations.log` which can be read by the transformation broker [from this repo](https://git-ce.rwth-aachen.de/g-nav-mob-irt/projects/galileonautic2plus/calibration/calibration_transformation_broker) that publishes the corresponding transformation messages.
 
 ## Code structure
 - All code lives inside the `src` directory in the ROS package `online_calibration`. 

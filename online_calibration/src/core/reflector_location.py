@@ -31,6 +31,6 @@ class ReflectorLocation:
         )
     
     @property
-    def gaussian_range_weight(self):
+    def range_squared_inv(self):
         # weight is inversely proportional to squared radial distance to sensor origin
-        return (1 / np.sqrt(self.centroid[0]**2 + self.centroid[1]**2 + self.centroid[2]**2))
+        return 1/(self.centroid[0]**2 + self.centroid[1]**2 + self.centroid[2]**2)

@@ -206,11 +206,15 @@ class PairCalibrator:
             # use unity weights if gaussian range weight is not used
             gaussian_range_weights = np.ones((len(self.reflector_locations_1)))
         else:
+            # maximum squared range for normalization
+            max_range_squared_inv = 1 / (200**2)
+            min_range_squared_inv = 1 / (0.5**2)
+
             # weight for gaussian range uncertainty, take lowest weight (maximum range)
             gaussian_range_weights = np.min(
                 np.stack((
-                    [rl.gaussian_range_weight for rl in self.reflector_locations_1],
-                    [rl.gaussian_range_weight for rl in self.reflector_locations_2]
+                    [ (rl.range_squared_inv - max_range_squared_inv) / (min_range_squared_inv - max_range_squared_inv)  for rl in self.reflector_locations_1],
+                    [ (rl.range_squared_inv - max_range_squared_inv) / (min_range_squared_inv - max_range_squared_inv)  for rl in self.reflector_locations_2]
                 )),
                 axis=0
             )
