@@ -273,9 +273,10 @@ class OnlineCalibrator(Node):
                 self.transformations[topic] = Transformation.unity()
                 continue
 
+            # Obtain all transformations of the transformation chain.
+            # (These might be unavailable, so we check afterwards)
             trafos = [
-                # switch to homogeneous transformation matrices for easy chaining
-                self._get_specific_transformation(from_topic, to_topic).matrix
+                self._get_specific_transformation(from_topic, to_topic)
                 for from_topic, to_topic in self.trafo_chains[topic]
             ]
 
@@ -294,6 +295,9 @@ class OnlineCalibrator(Node):
                 # transformations to the main_sensor is not known
                 continue
 
+            # All transformations are available, proceed.
+            # Switch to homogeneous transformation matrices for easy chaining
+            trafos = [t.matrix for t in trafos]
             combined = trafos.pop(0)
             while trafos:
                 combined = trafos.pop(0) @ combined
