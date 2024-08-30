@@ -29,3 +29,8 @@ class ReflectorLocation:
         return np.abs(
             self.normal_vector @ self.centroid / (np.linalg.norm(self.centroid) * np.linalg.norm(self.normal_vector))
         )
+    
+    @property
+    def range_squared_inv(self):
+        # weight is inversely proportional to squared radial distance to sensor origin
+        return 1/(self.centroid[0]**2 + self.centroid[1]**2 + self.centroid[2]**2)
