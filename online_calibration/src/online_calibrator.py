@@ -72,8 +72,7 @@ class OnlineCalibrator(Node):
         ]
 
         # Get the log directory path from ROS argument (if provided)
-        log_dir_parameter = self.get_parameter("log_path")
-        log_dir = str(log_dir_parameter.get_parameter_value().string_value)
+        log_dir = parameters.get_param("log_path")
 
         try:
             # Check if the default log directory exists, if not, create it

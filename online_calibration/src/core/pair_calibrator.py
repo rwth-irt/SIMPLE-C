@@ -1,6 +1,9 @@
 import itertools
+import json
 import logging
 from collections import deque
+from datetime import datetime
+from pathlib import Path
 from typing import Callable, Iterable
 
 import numpy as np
@@ -45,6 +48,23 @@ class PairCalibrator:
         self.reflector_locations_2: list[ReflectorLocation] = []
         self.transformation: Transformation | None = None
         self._trafo_callback = trafo_callback
+
+        # logging for evaluation
+        self._log = None
+        self._logfile = None
+        logdir = parameters.get_param("eval_log_dir")
+        if logdir.lower() != "none":
+            # logging enabled, prepare filename (which will stay the same for this session)
+            logpath = Path(logdir)
+            logpath.mkdir(parents=True, exist_ok=True)
+            self._log = {"log": []}  # more metadata may be added later on
+            timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+            filename = f"calib_log_{timestamp}_{self.topic1}_{self.topic2}"
+            filename = filename.replace("/", "")  # ROS topics often contain slashes, bad for filenames.
+            # (ROS topics often contain slashes, bad for filenames.)
+
+            self._logfile = logpath / filename
+            logger.info(f"Logging to file: {self._logfile}")
 
     def new_frame(self, f: Frame):
         """
@@ -108,9 +128,8 @@ class PairCalibrator:
         # first call calculate_marker_location of latest frames
         reflector1, status1 = PairCalibrator.calc_marker_location(self._frame_buffer_1)
         reflector2, status2 = PairCalibrator.calc_marker_location(self._frame_buffer_2)
-        # TODO do something with the status field...
 
-        # TODO use some logging system, remove those debug prints
+        # Output reflector "tracking"/detection status (one of: "UNIQUE_MATCH", "NO_MATCH", "MULTIPLE_MATCHES")
         # logger.info(f"{' ' * 20} status1: {str(status1).ljust(20)} status2: {str(status2).ljust(20)}")
 
         if reflector1 is None or reflector2 is None:
@@ -162,6 +181,22 @@ class PairCalibrator:
             len(self.reflector_locations_1)
         )
 
+        if self._log is not None:
+            # append logging information
+            self._log["log"].append({
+                "R": self.transformation.R,
+                "R_sensitivity": self.transformation.R_sensitivity,
+                "t": self.transformation.t,
+                "topic_from": self.topic1,
+                "topic_to": self.topic2,
+                "point_pairs_used": len(Q),
+                "point_pairs_total": len(self.reflector_locations_1),
+                # TODO some std of t?
+            })
+            # write to log file
+            with open(self._logfile, "w") as lf:
+                json.dump(self._log, lf, cls=_NumpyEncoder, indent=2, allow_nan=False)
+
     def _calculate_weights(self):
         normal_weight = parameters.get_param("normal_cosine_weight")
         number_weight = parameters.get_param("point_number_weight")
@@ -170,7 +205,7 @@ class PairCalibrator:
         if normal_weight == 0 and number_weight == 0 and gaussian_weight == 0:
             # use unity weights if no subweights are used
             return np.ones((len(self.reflector_locations_1)))
-        
+
         if normal_weight == 0:
             # use unity weights if normal weight is not used
             normal_cosine_weights = np.ones((len(self.reflector_locations_1)))
@@ -183,7 +218,7 @@ class PairCalibrator:
                 )),
                 axis=0
             )
-        
+
         if number_weight == 0:
             # use unity weights if number weight is not used
             point_number_weights = np.ones((len(self.reflector_locations_1)))
@@ -201,27 +236,29 @@ class PairCalibrator:
                 )),
                 axis=0
             )  # weight number in each cluster relative to maximum, choose smaller value per pair
-        
+
         if gaussian_weight == 0:
             # use unity weights if gaussian range weight is not used
             gaussian_range_weights = np.ones((len(self.reflector_locations_1)))
         else:
             # maximum squared range for normalization
-            max_range_squared_inv = 1 / (200**2)
-            min_range_squared_inv = 1 / (0.5**2)
+            max_range_squared_inv = 1 / (200 ** 2)
+            min_range_squared_inv = 1 / (0.5 ** 2)
 
             # weight for gaussian range uncertainty, take lowest weight (maximum range)
             gaussian_range_weights = np.min(
                 np.stack((
-                    [ (rl.range_squared_inv - max_range_squared_inv) / (min_range_squared_inv - max_range_squared_inv)  for rl in self.reflector_locations_1],
-                    [ (rl.range_squared_inv - max_range_squared_inv) / (min_range_squared_inv - max_range_squared_inv)  for rl in self.reflector_locations_2]
+                    [(rl.range_squared_inv - max_range_squared_inv) / (min_range_squared_inv - max_range_squared_inv)
+                     for rl in self.reflector_locations_1],
+                    [(rl.range_squared_inv - max_range_squared_inv) / (min_range_squared_inv - max_range_squared_inv)
+                     for rl in self.reflector_locations_2]
                 )),
                 axis=0
             )
 
         # link the subweights via multiplication
         return (
-                  normal_cosine_weights * point_number_weights * gaussian_range_weights
+                normal_cosine_weights * point_number_weights * gaussian_range_weights
         )
 
     def _get_location_filter(self) -> np.ndarray:
@@ -241,3 +278,10 @@ class PairCalibrator:
 
 def _filter_list(to_filter, boolean_array) -> Iterable:
     return itertools.compress(to_filter, boolean_array)
+
+
+class _NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
