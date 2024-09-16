@@ -40,7 +40,7 @@ def calc_transformation(P: np.array, Q: np.array):
 class Transformation:
     R: np.ndarray  # Rotation matrix
     t: np.ndarray  # Translation vector
-    R_quat: np.ndarray  # Rotation quaternion TODO calculate instead of specifying explicitly!
+    R_quat: np.ndarray  # Rotation quaternion TODO add property for it instead of specifying explicitly!
     R_sensitivity: np.ndarray  # Sensitivity matrix for R
 
     # TODO add calculation of (un)certainty
@@ -53,6 +53,9 @@ class Transformation:
             t=-self.t,
             R_quat=Rotation.from_quat(self.R_quat).inv().as_quat(),
             R_sensitivity=np.zeros((3, 3))
+            # TODO set sensitivity to None so that nothing calculates with it by accident.
+            # (This is no problem as we only use the inverse when calculating chained transformations,
+            # which are for visualization purposes only.)
         )
 
     @property
@@ -70,7 +73,7 @@ class Transformation:
             R=matrix[:3, :3],
             t=matrix[:3, 3],
             R_quat=Rotation.from_matrix(matrix[:3, :3]).as_quat(),
-            R_sensitivity=np.zeros((3, 3))
+            R_sensitivity=np.zeros((3, 3))  # TODO see above in self.inverse(..)!
         )
 
     @staticmethod
@@ -79,7 +82,7 @@ class Transformation:
             R=np.eye(3),
             t=np.zeros((3)),
             R_quat=np.array([0, 0, 0, 1]),
-            R_sensitivity=np.zeros((3, 3))
+            R_sensitivity=np.zeros((3, 3))  # TODO see above in self.inverse(..)!
         )
 
 

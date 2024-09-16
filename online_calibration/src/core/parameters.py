@@ -5,7 +5,9 @@ logger = logging.getLogger(__name__)
 _params: None | dict = None  # uninitialized
 
 parameter_definitions = {
+    # TODO document these properly in README.md!!!
     "log_path": "string",
+    "eval_log_dir": "string",  # set to "none" to disable logging
     "relative intensity threshold": "float",
     "DBSCAN epsilon": "float",
     "DBSCAN min samples": "int",

@@ -8,7 +8,7 @@ We demonstrate a robust and simple online calibration tool for LiDAR sensors in 
 
 ## Running the calibration
 
-**Online calibration in ROS/Docker**:
+### Online calibration in ROS/Docker
 
 To run in a docker container with all dependencies installed, the ROS package built and everything from ROS properly  sourced (this is all ensured when using the docker image built from the definitions in the [docker repository](https://git-ce.rwth-aachen.de/g-nav-mob-irt/projects/galileonautic2plus/calibration/robosense_docker)), run the following command:
 
@@ -26,7 +26,7 @@ You can find a web-based visualization in [this repo](https://git-ce.rwth-aachen
 
 The transformations will be stored in `transformations.log` at `"log_path": "/DATA/log_files"` as set in the default parameters or launch file.
 
-**Offline calibration (Debug Mode)**
+### Offline calibration (Debug Mode)
 
 - Using the script `online_calibration/main_cli.py`, the calibration can be used without ROS (pass `--help` for usage information) by importing ROS-bags as numpy arrays.
 - Reading rosbag data is used using separate libraries.
@@ -34,8 +34,76 @@ The transformations will be stored in `transformations.log` at `"log_path": "/DA
 - Visualizations of reflector tracking and point pair alignment are available, which are not available inside of ROS.
 - As rosbag import is very slow, it might be faster to run the ROS node and play back the rosbag using ROS itself as long as no visualization is required.
 
-**Using the Calibration**
+### Using the Calibration
 The transformation computed by the calibration module is stored in `transformations.log` which can be read by the transformation broker [from this repo](https://git-ce.rwth-aachen.de/g-nav-mob-irt/projects/galileonautic2plus/calibration/calibration_transformation_broker) that publishes the corresponding transformation messages.
+
+### Evaluation data logging
+For development and evaluation, in addition to logs of the whole console output,
+the program can write information about the calculated transformations to JSON files.
+
+This functionality is managed by the ROS parameter `eval_log_dir`. This can be set to "none" to disable the logs. Otherwise, a directory should be specified, to which log files will be written.
+
+There is **one log file per program run and per sensor pair**, which is updated whenever a new transformation is available. The filenames are as follows: `"calib_log_{timestamp}_{topic1}_{topic2}.json"`.
+
+Each JSON file is structured as follows:
+```json
+{
+  "transformations": [
+      // list of "transformation info dicts"
+  ]
+  // (this may be extended with further information later)
+}
+```
+
+The structure of the "transformation info dicts" is:
+```json
+{
+"R": [
+   [
+      0.999492098067459,
+      -0.005532258631072325,
+      -0.031383754000243125
+   ],
+   [
+      0.004253334204850159,
+      0.9991634771255027,
+      -0.04067253528631841
+   ],
+   [
+      0.03158251175651966,
+      0.040518392032679304,
+      0.998679530609412
+   ]
+],
+"R_sensitivity": [
+   [
+      0.011162393815827044,
+      -0.018766981873872594,
+      0.0013434460301343723
+   ],
+   [
+      -0.018766981873872594,
+      0.03641271478917377,
+      -0.002514645113975557
+   ],
+   [
+      0.0013434460301343723,
+      -0.002514645113975557,
+      0.001352084002737808
+   ]
+],
+"t": [
+   0.09161414476495366,
+   0.9594284458110778,
+   -0.9511697314845842
+],
+"topic_from": "/rslidar_points_l",
+"topic_to": "/rslidar_points_r",
+"point_pairs_used": 91,
+"point_pairs_total": 91
+}
+```
+
 
 ## Code structure
 - All code lives inside the `src` directory in the ROS package `online_calibration`. 
