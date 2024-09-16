@@ -57,9 +57,9 @@ class PairCalibrator:
             # logging enabled, prepare filename (which will stay the same for this session)
             logpath = Path(logdir)
             logpath.mkdir(parents=True, exist_ok=True)
-            self._log = {"log": []}  # more metadata may be added later on
+            self._log = {"transformations": []}  # more metadata may be added later on
             timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-            filename = f"calib_log_{timestamp}_{self.topic1}_{self.topic2}"
+            filename = f"calib_log_{timestamp}_{self.topic1}_{self.topic2}.json"
             filename = filename.replace("/", "")  # ROS topics often contain slashes, bad for filenames.
             # (ROS topics often contain slashes, bad for filenames.)
 
@@ -183,7 +183,7 @@ class PairCalibrator:
 
         if self._log is not None:
             # append logging information
-            self._log["log"].append({
+            self._log["transformations"].append({
                 "R": self.transformation.R,
                 "R_sensitivity": self.transformation.R_sensitivity,
                 "t": self.transformation.t,
