@@ -1,6 +1,7 @@
 /online_calibration:
   ros__parameters:
     "log_path": "/DATA/log_files"
+    "eval_log_dir": "/DATA/eval_log_files"
     "relative intensity threshold": 0.7
     "DBSCAN epsilon": 0.4
     "DBSCAN min samples": 9
