@@ -49,6 +49,11 @@ class PairCalibrator:
         self.transformation: Transformation | None = None
         self._trafo_callback = trafo_callback
 
+        # initialize std values for convergence check
+        self.std_x = 0
+        self.std_y = 0
+        self.std_z = 0
+
         # logging for evaluation
         self._log = None
         self._logfile = None
@@ -182,11 +187,11 @@ class PairCalibrator:
 
         # Calculate mean and standard deviation of distances
         mean_x = np.mean(distances_x)
-        std_x = np.std(distances_x)
+        self.std_x = np.std(distances_x)
         mean_y = np.mean(distances_y)
-        std_y = np.std(distances_y)
+        self.std_y = np.std(distances_y)
         mean_z = np.mean(distances_z)
-        std_z = np.std(distances_z)
+        self.std_z = np.std(distances_z)
 
         # broadcast to websocket
         broadcast_pair_metadata(
@@ -195,7 +200,7 @@ class PairCalibrator:
             self.transformation,
             len(Q),
             len(self.reflector_locations_1),
-            [std_x, std_y, std_z]
+            [self.std_x, self.std_y, self.std_z]
         )
 
         if self._log is not None:

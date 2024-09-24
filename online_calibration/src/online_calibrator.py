@@ -130,6 +130,9 @@ class OnlineCalibrator(Node):
         # Initialize latest transformation variable
         self.latest_transformation = None
 
+        # initialize convergence threshold
+        self.convergence_threshold = parameters.get_param("convergence_threshold")
+
         # Get all topics we have to subscribe to
         self.topics = set()  # collect the topics we have to subscribe to
         for a, b in self.sensor_pairs:
@@ -234,6 +237,7 @@ class OnlineCalibrator(Node):
         self.latest_transformation = t
 
         self._update_transformations()
+        self._update_standard_deviations()
         self._broadcast_websocket()
 
     def _get_specific_transformation(self, from_topic: str, to_topic: str) -> Transformation | None:
@@ -302,6 +306,26 @@ class OnlineCalibrator(Node):
                 combined = trafos.pop(0) @ combined
             self.transformations[topic] = Transformation.from_matrix(combined)  # switch back to Transformation object
 
+    def _update_standard_deviations(self):
+        """
+        Update the standard deviations (std_x, std_y, std_z) from the pair calibrators.
+        """
+        std_x_values = []
+        std_y_values = []
+        std_z_values = []
+
+        for pcs in self.pair_calibrators.values():
+            for pc in pcs:
+                if hasattr(pc, 'std_x') and hasattr(pc, 'std_y') and hasattr(pc, 'std_z'):
+                    std_x_values.append(pc.std_x)
+                    std_y_values.append(pc.std_y)
+                    std_z_values.append(pc.std_z)
+
+        if std_x_values and std_y_values and std_z_values:
+            self.std_x = max(std_x_values)
+            self.std_y = max(std_y_values)
+            self.std_z = max(std_z_values)
+
     def _broadcast_websocket(self):
         for topic in self.transformations:
             if not self.transformations[topic]:
@@ -327,3 +351,17 @@ class OnlineCalibrator(Node):
                 response.success = False
                 response.message = f'Error sending latest transformation \n{str(e)}'
                 return response
+
+    def check_convergence(self) -> bool:
+        """
+        Check if the convergence criteria are met.
+        :return: True if convergence is achieved, False otherwise.
+        """
+        # Ensure that std_x, std_y, and std_z are attributes of the class
+        if hasattr(self, 'std_x') and hasattr(self, 'std_y') and hasattr(self, 'std_z'):
+            # Check if each standard deviation is below the threshold
+            if (self.std_x < self.convergence_threshold and
+                self.std_y < self.convergence_threshold and
+                self.std_z < self.convergence_threshold):
+                return True
+        return False

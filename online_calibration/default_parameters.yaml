@@ -15,3 +15,4 @@
     "normal_cosine_weight": 0
     "point_number_weight": 0
     "gaussian_range_weight": 0
+    "convergece_threshold": [0.02, 0.02, 0.1]

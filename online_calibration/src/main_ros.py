@@ -15,7 +15,11 @@ def main(args=None):
     calibrator = OnlineCalibrator()
     stop_server = websocket_server.main(calibrator.reset)  # start up websocket server in new Thread
     try:
-        rclpy.spin(calibrator)
+        while rclpy.ok():
+            rclpy.spin(calibrator)
+            if calibrator.check_convergence():
+                logger.info("Convergence reached, stopping.")
+                break
     except KeyboardInterrupt:
         logger.info("Got KeyboardInterrupt, stopping.")
     stop_server()

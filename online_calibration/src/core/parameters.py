@@ -21,6 +21,7 @@ parameter_definitions = {
     "normal_cosine_weight": "int",
     "point_number_weight": "int",
     "gaussian_range_weight": "int",
+    "convergece_threshold": "list",
 }
 
 
@@ -42,6 +43,8 @@ def ros_declare_parameters(rosnode):
             descr = ParameterDescriptor(name=name, type=ParameterType.PARAMETER_INTEGER)
         elif typeinfo == "string":
             descr = ParameterDescriptor(name=name, type=ParameterType.PARAMETER_STRING)
+        elif typeinfo == "list":
+            descr = ParameterDescriptor(name=name, type=ParameterType.PARAMETER_DOUBLE_ARRAY)
         else:
             raise Exception(f"Parameter type '{typeinfo}' not yet implemented!")
         rosnode.declare_parameter(name=name, descriptor=descr)
@@ -78,6 +81,8 @@ def init_from_rosnode(rosnode):
                 _params[name] = int(rosnode.get_parameter(name).get_parameter_value().integer_value)
             elif typeinfo == "string":
                 _params[name] = str(rosnode.get_parameter(name).get_parameter_value().string_value)
+            elif typeinfo == "list":
+                _params[name] = rosnode.get_parameter(name).get_parameter_value().double_array_value
             else:
                 raise Exception(f"Parameter type '{typeinfo}' not yet implemented!")
             logger.info(f"Loaded parameter '{name}': {_params[name]}")
