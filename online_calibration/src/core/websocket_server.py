@@ -87,7 +87,8 @@ def broadcast_pair_metadata(
         to_topic: str,
         trafo: Transformation,
         used_point_pairs: int,
-        total_point_pairs: int
+        total_point_pairs: int,
+        std_dimensions: list[float]
 ):
     sensitivity_number = np.linalg.norm(trafo.R_sensitivity, ord="fro")  # frobenius norm, single value
     data = {
@@ -101,6 +102,7 @@ def broadcast_pair_metadata(
         },
         "used_point_pairs": used_point_pairs,
         "total_point_pairs": total_point_pairs,
+        "standard_devaitions": std_dimensions
     }
     _broadcast_internal(data)
 

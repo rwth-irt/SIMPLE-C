@@ -172,16 +172,44 @@ class PairCalibrator:
         if self._trafo_callback:
             self._trafo_callback(self.transformation, self.topic1, self.topic2)
 
+        # Apply the transformation to P
+        P_transformed_to_Q = np.dot(P, self.transformation.R.T) + self.transformation.t
+
+        # Calculate pairwise distances in x, y, z dimensions
+        distances_x = Q[:, 0] - P_transformed_to_Q[:, 0]
+        distances_y = Q[:, 1] - P_transformed_to_Q[:, 1]
+        distances_z = Q[:, 2] - P_transformed_to_Q[:, 2]
+
+        # Calculate mean and standard deviation of distances
+        mean_x = np.mean(distances_x)
+        std_x = np.std(distances_x)
+        mean_y = np.mean(distances_y)
+        std_y = np.std(distances_y)
+        mean_z = np.mean(distances_z)
+        std_z = np.std(distances_z)
+
         # broadcast to websocket
         broadcast_pair_metadata(
             self.topic1,
             self.topic2,
             self.transformation,
             len(Q),
-            len(self.reflector_locations_1)
+            len(self.reflector_locations_1),
+            [std_x, std_y, std_z]
         )
 
         if self._log is not None:
+
+            # calculate maximum spread in x, y, z dimensions for P
+            max_extent_P_x = np.max(P[:, 0]) - np.min(P[:, 0])
+            max_extent_P_y = np.max(P[:, 1]) - np.min(P[:, 1])
+            max_extent_P_z = np.max(P[:, 2]) - np.min(P[:, 2])
+
+            # calculate maximum spread in x, y, z dimensions for Q
+            max_extent_Q_x = np.max(Q[:, 0]) - np.min(Q[:, 0])
+            max_extent_Q_y = np.max(Q[:, 1]) - np.min(Q[:, 1])
+            max_extent_Q_z = np.max(Q[:, 2]) - np.min(Q[:, 2])
+
             # append logging information
             self._log["transformations"].append({
                 "R": self.transformation.R,
@@ -191,7 +219,10 @@ class PairCalibrator:
                 "topic_to": self.topic2,
                 "point_pairs_used": len(Q),
                 "point_pairs_total": len(self.reflector_locations_1),
-                # TODO some std of t?
+                "max_extent_P": {"x": max_extent_P_x, "y": max_extent_P_y, "z": max_extent_P_z},
+                "max_extent_Q": {"x": max_extent_Q_x, "y": max_extent_Q_y, "z": max_extent_Q_z},
+                "mean_distances": {"x": mean_x, "y": mean_y, "z": mean_z},
+                "std_distances": {"x": std_x, "y": std_y, "z": std_z},
             })
             # write to log file
             with open(self._logfile, "w") as lf:

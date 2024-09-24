@@ -1,5 +1,9 @@
-# SIMPLEX
+# SIMPLE-C
 ##  Uncertainty-aware Multi-LiDAR Extrinsic Calibration using a Simple Dynamic Target in Moving Feature-Sparse Environments
+
+<p align="center">
+  <img src="imgs/overview_black.png" />
+</p>
 
 This calibration tool can be used for calibrating multiple LiDAR sensors using a simple reflective target that is moved through the environment while being tracked. The tool was created to allow for pairwise calibration of LiDAR sensors on large vessels. The vessel is docked on the water introducing a unintendedly moving sensor platform and a moving environment (water surface), meaning that we cannot use any feature- or environment-based calibration algorithm. Also, we cannot use static targets as they would constantly move on the water surface. Further, as large vessels are often expensive to move, we created a tool that does not require any movement of the platform to calibrate sensors. We also omit the use of external auxiliary sensors such as IMU or GNSS, the need to manufacture complex shaped targets or algorithms that rely on geometric shape detection and calculation. Our calibration tool can be used indoor, outdoor and on waterside making the tool available for many users, applications and environments. Additionally, the tool is online-capable such that live feedback can be used to optimize the calibration procedure or parameters. For point cloud registration we rely on a simple weighted Kabsch Algorithm.
 
@@ -10,7 +14,9 @@ We demonstrate a robust and simple online calibration tool for LiDAR sensors in 
 
 ### Online calibration in ROS/Docker
 
-To run in a docker container with all dependencies installed, the ROS package built and everything from ROS properly  sourced (this is all ensured when using the docker image built from the definitions in the [docker repository](https://git-ce.rwth-aachen.de/g-nav-mob-irt/projects/galileonautic2plus/calibration/robosense_docker)), run the following command:
+To use the tool, we propose to use our docker container with all dependencies and packages pre-installed and built: **[Docker-Repostiory](https://git-ce.rwth-aachen.de/g-nav-mob-irt/projects/galileonautic2plus/calibration/robosense_docker)**
+
+You can also run the tool without docker on your system:
 
 `ros2 run online_calibration main --ros-args --params-file /PATH/TO/parameters.yaml -p sensor_pairs:="<PAIRS>"`
 
@@ -22,7 +28,7 @@ The ros node will then listen to PointCloud2 messages on the provided topics and
 
 To run the calibration tool online on already captured data from ROS bags, you can simply play back the ROS bags in the docker container and run the calibration tool simultaneously to get the calibration parameters.
 
-You can find a web-based visualization in [this repo](https://git-ce.rwth-aachen.de/g-nav-mob-irt/projects/galileonautic2plus/calibration/web_visualization) and call it via `localhost:8000`
+You can find a **web-based visualization** in **[this repo](https://git-ce.rwth-aachen.de/g-nav-mob-irt/projects/galileonautic2plus/calibration/web_visualization)** and call it via `localhost:8000`
 
 The transformations will be stored in `transformations.log` at `"log_path": "/DATA/log_files"` as set in the default parameters or launch file.
 
@@ -127,7 +133,14 @@ In a single run of the program, multiple sensor pairs should be calibrated, whic
 **PairCalibrator: Timing of frame data**  
 A PairCalibrator has a callback function `new_frame`, which is passed `Frame` objects for both sensors (in real-time) as soon as they are recorded. As the Kabsch algorithm requires pairs of points, i.e. corresponding frames of both sensors, these frames are cached until data has been received from each sensor. Frame acquisition can not be triggered at the Lidar sensors used for this project. Therefore, frames are simply dropped if they are older than 60% of the expected time delay between two frames.
 
-**Reflector detection**  
+<p align="center">
+  <img 
+  src="imgs/backtracking.png" 
+  width="500"
+  />
+</p>
+
+**Reflector detection using Backtracking and Filtering**  
 A series of processing steps is used to identify the detector in the data *of a single sensor*.
 
 1. The reflector is expected to result in very intense points in the lidar frame. Hence points are filtered using a threshold value for the intensity channel. The threshold value is calculated adaptively so that a fixed ratio of points passes (configurable by the parameter `"relative intensity threshold"`).
