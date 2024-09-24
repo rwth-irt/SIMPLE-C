@@ -16,7 +16,7 @@ def main(args=None):
     stop_server = websocket_server.main(calibrator.reset)  # start up websocket server in new Thread
     try:
         while rclpy.ok():
-            rclpy.spin(calibrator)
+            rclpy.spin_once(calibrator)
             if calibrator.check_convergence():
                 logger.info("Convergence reached, stopping.")
                 break

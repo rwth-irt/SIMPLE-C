@@ -131,7 +131,9 @@ class OnlineCalibrator(Node):
         self.latest_transformation = None
 
         # initialize convergence threshold
-        self.convergence_threshold = parameters.get_param("convergence_threshold")
+        self.convergence_threshold = parameters.get_param("convergece_threshold")
+        self.minimum_iterations_until_convergence = parameters.get_param("minimum_iterations_until_convergence")
+        self.transformation_count = 0
 
         # Get all topics we have to subscribe to
         self.topics = set()  # collect the topics we have to subscribe to
@@ -239,6 +241,8 @@ class OnlineCalibrator(Node):
         self._update_transformations()
         self._update_standard_deviations()
         self._broadcast_websocket()
+
+        self.transformation_count += 1
 
     def _get_specific_transformation(self, from_topic: str, to_topic: str) -> Transformation | None:
         """
@@ -358,10 +362,16 @@ class OnlineCalibrator(Node):
         :return: True if convergence is achieved, False otherwise.
         """
         # Ensure that std_x, std_y, and std_z are attributes of the class
-        if hasattr(self, 'std_x') and hasattr(self, 'std_y') and hasattr(self, 'std_z'):
-            # Check if each standard deviation is below the threshold
-            if (self.std_x < self.convergence_threshold and
-                self.std_y < self.convergence_threshold and
-                self.std_z < self.convergence_threshold):
-                return True
-        return False
+        if not (hasattr(self, 'std_x') and hasattr(self, 'std_y') and hasattr(self, 'std_z')):
+            return False
+
+        if not self.transformation_count >= self.minimum_iterations_until_convergence:
+            return False
+
+        # Check if each standard deviation is below the threshold
+        if not (self.std_x < self.convergence_threshold[0] and
+            self.std_y < self.convergence_threshold[1] and
+            self.std_z < self.convergence_threshold[2]):
+            return False
+        
+        return True

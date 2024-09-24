@@ -22,6 +22,7 @@ parameter_definitions = {
     "point_number_weight": "int",
     "gaussian_range_weight": "int",
     "convergece_threshold": "list",
+    "minimum_iterations_until_convergence": "int",
 }
 
 

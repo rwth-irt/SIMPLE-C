@@ -227,7 +227,7 @@ class PairCalibrator:
                 "max_extent_P": {"x": max_extent_P_x, "y": max_extent_P_y, "z": max_extent_P_z},
                 "max_extent_Q": {"x": max_extent_Q_x, "y": max_extent_Q_y, "z": max_extent_Q_z},
                 "mean_distances": {"x": mean_x, "y": mean_y, "z": mean_z},
-                "std_distances": {"x": std_x, "y": std_y, "z": std_z},
+                "std_distances": {"x": self.std_x, "y": self.std_y, "z": self.std_z},
             })
             # write to log file
             with open(self._logfile, "w") as lf:
