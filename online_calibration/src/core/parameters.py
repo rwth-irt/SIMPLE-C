@@ -21,7 +21,7 @@ parameter_definitions = {
     "normal_cosine_weight": "int",
     "point_number_weight": "int",
     "gaussian_range_weight": "int",
-    "convergece_threshold": "list",
+    "convergence_threshold": "double_list",
     "minimum_iterations_until_convergence": "int",
 }
 
@@ -44,7 +44,7 @@ def ros_declare_parameters(rosnode):
             descr = ParameterDescriptor(name=name, type=ParameterType.PARAMETER_INTEGER)
         elif typeinfo == "string":
             descr = ParameterDescriptor(name=name, type=ParameterType.PARAMETER_STRING)
-        elif typeinfo == "list":
+        elif typeinfo == "double_list":
             descr = ParameterDescriptor(name=name, type=ParameterType.PARAMETER_DOUBLE_ARRAY)
         else:
             raise Exception(f"Parameter type '{typeinfo}' not yet implemented!")

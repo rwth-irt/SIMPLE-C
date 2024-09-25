@@ -165,11 +165,11 @@ To differentiate between the reflector and static reflective objects (or almost 
 6. **Adaptive Outlier Rejection:** As soon as an initial transformation exists, further filtering is applied to remove outliers that might have passed all filters described in step 3. To accomplish this, all point pairs of one sensor are transformed, which should ideally result in perfectly aligned point clouds. The mean distance between two adjacent points (after transformation) is calculated and point pairs with a much greater distance (`mean_distance * "outlier_mean_factor"`) are excluded before the transformation is calculated.
 
 7. **The Kabsch algorithm** accepts weights for each point pair. This allows for using weights to consider uncertainty or an indicator of the targets relaibility for calibration purposes. This weight is composed of three subweights:
-   - **Assumption**: The more points there are in a valid cluster, the more reliable is the estimation of the target center. Activate the weight setting `point_number_weight: 1`
+   - **Assumption**: The more points there are in a valid cluster, the more reliable is the estimation of the target center. Activate the weight by setting `point_number_weight: 1`
       - **Weight** $w_1$: The number of points in the cluster, divided by the maximum number of all clusters identified as the reflector.
-   - **Assumption**: The position of the reflector's center can be calculated more accurately if the reflector surface points are faced directly towards the sensor. Activate the weight setting `normal_cosine_weight: 1`
+   - **Assumption**: The position of the reflector's center can be calculated more accurately if the reflector surface points are faced directly towards the sensor. Activate the weight by setting `normal_cosine_weight: 1`
       - **Weight** $w_2$: The cosine similarity of the normal vector of the reflector surface and the vector from sensor (in the origin) to the cluster centroid. The normal vector is calculated using an SVD, assuming the points to be distributed approximately planar. 
-   - **Assumption**: As the sensor outputs *x, y, z* coordinates but measures radial distance *r*, there is a range dependent error or uncertainty in the coordinates. Activate the weight setting `gaussian_range_weight: 1`
+   - **Assumption**: As the sensor outputs *x, y, z* coordinates but measures radial distance *r*, there is a range dependent error or uncertainty in the coordinates. Activate the weight by setting `gaussian_range_weight: 1`
       - **Weight** $w_3$: The weight is inversely proportional to the squared radial distance to the sensors origin. The further away the measurement is, the higher the uncertainty and the lower the weight.
    - **Combined Weight**: Multiplicative linkage of the subweights to avoid further hyperparameters and induce an AND-logic to the weights. $w = w_1 * w_2 * w_3$ The weights can individually be turned on/off.
 

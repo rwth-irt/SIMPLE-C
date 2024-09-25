@@ -50,9 +50,8 @@ class PairCalibrator:
         self._trafo_callback = trafo_callback
 
         # initialize std values for convergence check
-        self.std_x = 0
-        self.std_y = 0
-        self.std_z = 0
+        self.std_xyz = None
+        self.convergence_threshold = parameters.get_param("convergence_threshold")
 
         # logging for evaluation
         self._log = None
@@ -181,17 +180,12 @@ class PairCalibrator:
         P_transformed_to_Q = np.dot(P, self.transformation.R.T) + self.transformation.t
 
         # Calculate pairwise distances in x, y, z dimensions
-        distances_x = Q[:, 0] - P_transformed_to_Q[:, 0]
-        distances_y = Q[:, 1] - P_transformed_to_Q[:, 1]
-        distances_z = Q[:, 2] - P_transformed_to_Q[:, 2]
+        pointwise_distances = Q - P_transformed_to_Q
 
         # Calculate mean and standard deviation of distances
-        mean_x = np.mean(distances_x)
-        self.std_x = np.std(distances_x)
-        mean_y = np.mean(distances_y)
-        self.std_y = np.std(distances_y)
-        mean_z = np.mean(distances_z)
-        self.std_z = np.std(distances_z)
+        mean_xyz = np.mean(pointwise_distances, axis=0)
+        std_xyz = np.std(pointwise_distances, axis=0)
+        self.std_xyz = std_xyz
 
         # broadcast to websocket
         broadcast_pair_metadata(
@@ -200,20 +194,16 @@ class PairCalibrator:
             self.transformation,
             len(Q),
             len(self.reflector_locations_1),
-            [self.std_x, self.std_y, self.std_z]
+            std_xyz
         )
 
         if self._log is not None:
 
             # calculate maximum spread in x, y, z dimensions for P
-            max_extent_P_x = np.max(P[:, 0]) - np.min(P[:, 0])
-            max_extent_P_y = np.max(P[:, 1]) - np.min(P[:, 1])
-            max_extent_P_z = np.max(P[:, 2]) - np.min(P[:, 2])
+            max_extent_P = np.ptp(P, axis=0)
 
             # calculate maximum spread in x, y, z dimensions for Q
-            max_extent_Q_x = np.max(Q[:, 0]) - np.min(Q[:, 0])
-            max_extent_Q_y = np.max(Q[:, 1]) - np.min(Q[:, 1])
-            max_extent_Q_z = np.max(Q[:, 2]) - np.min(Q[:, 2])
+            max_extent_Q = np.ptp(Q, axis=0)
 
             # append logging information
             self._log["transformations"].append({
@@ -224,10 +214,10 @@ class PairCalibrator:
                 "topic_to": self.topic2,
                 "point_pairs_used": len(Q),
                 "point_pairs_total": len(self.reflector_locations_1),
-                "max_extent_P": {"x": max_extent_P_x, "y": max_extent_P_y, "z": max_extent_P_z},
-                "max_extent_Q": {"x": max_extent_Q_x, "y": max_extent_Q_y, "z": max_extent_Q_z},
-                "mean_distances": {"x": mean_x, "y": mean_y, "z": mean_z},
-                "std_distances": {"x": self.std_x, "y": self.std_y, "z": self.std_z},
+                "max_extent_P": max_extent_P,
+                "max_extent_Q": max_extent_Q,
+                "mean_distances": mean_xyz,
+                "std_distances": std_xyz,
             })
             # write to log file
             with open(self._logfile, "w") as lf:
@@ -310,6 +300,19 @@ class PairCalibrator:
         filter1 = distance < (np.mean(distance) * float(parameters.get_param("outlier_mean_factor")))
 
         return filter1
+    
+    def check_convergence(self) -> bool:
+        """
+        Check if the convergence criteria are met for this PairCalibrator.
+        :return: True if convergence is achieved, False otherwise.
+        """
+
+        if self.std_xyz is None:
+            return False
+
+        return (self.std_xyz[0] < self.convergence_threshold[0] and
+                self.std_xyz[1] < self.convergence_threshold[1] and
+                self.std_xyz[2] < self.convergence_threshold[2])
 
 
 def _filter_list(to_filter, boolean_array) -> Iterable:
