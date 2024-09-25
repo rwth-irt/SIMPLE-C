@@ -22,7 +22,7 @@ parameter_definitions = {
     "point_number_weight": "int",
     "gaussian_range_weight": "int",
     "convergence_threshold": "double_list",
-    "minimum_iterations_until_convergence": "int",
+    "minimum_iterations_until_convergence": "int"
 }
 
 
@@ -82,7 +82,7 @@ def init_from_rosnode(rosnode):
                 _params[name] = int(rosnode.get_parameter(name).get_parameter_value().integer_value)
             elif typeinfo == "string":
                 _params[name] = str(rosnode.get_parameter(name).get_parameter_value().string_value)
-            elif typeinfo == "list":
+            elif typeinfo == "double_list":
                 _params[name] = rosnode.get_parameter(name).get_parameter_value().double_array_value
             else:
                 raise Exception(f"Parameter type '{typeinfo}' not yet implemented!")

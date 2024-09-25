@@ -180,7 +180,7 @@ class PairCalibrator:
         P_transformed_to_Q = np.dot(P, self.transformation.R.T) + self.transformation.t
 
         # Calculate pairwise distances in x, y, z dimensions
-        pointwise_distances = Q - P_transformed_to_Q
+        pointwise_distances = np.abs(Q - P_transformed_to_Q)
 
         # Calculate mean and standard deviation of distances
         mean_xyz = np.mean(pointwise_distances, axis=0)

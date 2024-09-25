@@ -2,7 +2,9 @@
 ##  Uncertainty-aware Multi-LiDAR Extrinsic Calibration using a Simple Dynamic Target in Moving Feature-Sparse Environments
 
 <p align="center">
-  <img src="imgs/overview_black.png" />
+  <img 
+  src="imgs/overview_black.png" 
+  width="500"/>
 </p>
 
 This calibration tool can be used for calibrating multiple LiDAR sensors using a simple reflective target that is moved through the environment while being tracked. The tool was created to allow for pairwise calibration of LiDAR sensors on large vessels. The vessel is docked on the water introducing a unintendedly moving sensor platform and a moving environment (water surface), meaning that we cannot use any feature- or environment-based calibration algorithm. Also, we cannot use static targets as they would constantly move on the water surface. Further, as large vessels are often expensive to move, we created a tool that does not require any movement of the platform to calibrate sensors. We also omit the use of external auxiliary sensors such as IMU or GNSS, the need to manufacture complex shaped targets or algorithms that rely on geometric shape detection and calculation. Our calibration tool can be used indoor, outdoor and on waterside making the tool available for many users, applications and environments. Additionally, the tool is online-capable such that live feedback can be used to optimize the calibration procedure or parameters. For point cloud registration we rely on a simple weighted Kabsch Algorithm.
@@ -173,6 +175,6 @@ To differentiate between the reflector and static reflective objects (or almost 
       - **Weight** $w_3$: The weight is inversely proportional to the squared radial distance to the sensors origin. The further away the measurement is, the higher the uncertainty and the lower the weight.
    - **Combined Weight**: Multiplicative linkage of the subweights to avoid further hyperparameters and induce an AND-logic to the weights. $w = w_1 * w_2 * w_3$ The weights can individually be turned on/off.
 
-8. **Convergence:** The tool stops calibration if the standard deviation of the corresponding-point distances reach a certain threhsold in each dimension (x, y, z). A minimum runtime of $n$ iterations is required. You can set the convergence threshold for each dimension in `convergece_threshold: [x_thres, y_thres, z_thres]` and the minimum number of iterations until the criterion is used with `minimum_iterations_until_convergence`.
+8. **Convergence:** The tool stops calibration if the standard deviation of the corresponding-point distances reach a certain threhsold in each dimension (x, y, z). A minimum runtime of $n$ iterations is required. You can set the convergence threshold for each dimension in `convergence_threshold: [x_thres, y_thres, z_thres]` and the minimum number of iterations until the criterion is used with `minimum_iterations_until_convergence`.
 
    Note that the algorithm only accepts a *single* weight per point *pair*, not per point. Therefore, the minimum weight of the points in a pair is used.
