@@ -145,7 +145,7 @@ A PairCalibrator has a callback function `new_frame`, which is passed `Frame` ob
 **Reflector detection using Backtracking and Filtering**  
 A series of processing steps is used to identify the detector in the data *of a single sensor*.
 
-1. The reflector is expected to result in very intense points in the lidar frame. Hence points are filtered using a threshold value for the intensity channel. The threshold value is calculated adaptively so that a fixed ratio of points passes (configurable by the parameter `"relative intensity threshold"`).
+1. The reflector is expected to result in very intense points in the lidar frame. Hence points are filtered using a threshold value for the intensity channel. The threshold value is calculated adaptively: $I_\text{adapt.} = w_\text{I} \cdot I_\text{max}$ (configurable by the parameter `"relative intensity threshold"`).
 
 2. These remaining points are then expected to be from distinct bright objects. The DBSCAN algorithm is used for clustering, configurable by the parameters `"DBSCAN epsilon"` (in meters, as is all coordinate data from the sensors) and `"DBSCAN min samples"`.
 
