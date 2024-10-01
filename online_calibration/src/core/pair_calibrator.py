@@ -218,6 +218,24 @@ class PairCalibrator:
                 "max_extent_Q": max_extent_Q,
                 "mean_distances": mean_xyz,
                 "std_distances": std_xyz,
+                "parameters": {
+                    "rel_intensity_threshold": parameters.get_param("relative intensity threshold"),
+                    "DBSCAN_epsilon": parameters.get_param("DBSCAN epsilon"),
+                    "DBSCAN_min_samples": parameters.get_param("DBSCAN min samples"),
+                    "max_neighbor_distance": parameters.get_param("maximum neighbor distance"),
+                    "min_velocity": parameters.get_param("minimum velocity"),
+                    "window_size": parameters.get_param("window size"),
+                    "max_vector_angle_deg": parameters.get_param("max. vector angle [deg]"),
+                    "outlier_mean_factor": parameters.get_param("outlier_mean_factor"),
+                    "max_point_number_change_ratio": parameters.get_param("max_point_number_change_ratio"),
+                    "normal_cosine_weight": parameters.get_param("normal_cosine_weight"),
+                    "point_number_weight": parameters.get_param("point_number_weight"),
+                    "gaussian_range_weight": parameters.get_param("gaussian_range_weight"),
+                    "outlier_mean_factor": parameters.get_param("outlier_mean_factor"),
+                    "convergence_threshold": str(parameters.get_param("convergence_threshold")),
+                    "minimum_iterations_until_convergence": parameters.get_param("minimum_iterations_until_convergence"),
+
+                }
             })
             # write to log file
             with open(self._logfile, "w") as lf:
