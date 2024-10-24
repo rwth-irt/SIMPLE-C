@@ -158,7 +158,9 @@ class PairCalibrator:
 
         # Apply filters that depend on an existing transformation
         # i.e. "adaptive outlier rejection"
-        if self.transformation:
+        if parameters.get_param("disable_outlier_rejection"):
+            logger.warning("Skipping outlier rejection! Only use this for tests!")
+        elif self.transformation:
             outlier_filter = self._get_calib_pointcloud_outlier_filter()
             if sum(outlier_filter) > 3:
                 # only filter if at least 3 points will remain after filtering, otherwise leave unchanged

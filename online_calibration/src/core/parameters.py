@@ -4,9 +4,6 @@ logger = logging.getLogger(__name__)
 
 _params: None | dict = None  # uninitialized
 
-# initialize defaults for debugging/analysis variables
-_params["disable_outlier_rejection"] = False
-
 
 parameter_definitions = {
     # TODO document these properly in README.md!!!
