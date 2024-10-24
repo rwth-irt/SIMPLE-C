@@ -151,22 +151,23 @@ class PairCalibrator:
             logger.info("Not enough point pairs yet")
             return
 
-        # Recalculate and publish transformation with new data
+        # Get calibration point cloud based on current reflector_locations
+        P = np.array([rl.centroid for rl in self.reflector_locations_1])
+        Q = np.array([rl.centroid for rl in self.reflector_locations_2])
         weights = self._calculate_weights()
-        P, Q, location_filter = None, None, None
-        if self.transformation:
-            location_filter = self._get_location_filter()
-            if sum(location_filter) > 3:
-                # only filter if at least 3 points will remain after filtering
-                P = np.array([rl.centroid for rl in _filter_list(self.reflector_locations_1, location_filter)])
-                Q = np.array([rl.centroid for rl in _filter_list(self.reflector_locations_2, location_filter)])
-                weights = list(_filter_list(weights, location_filter))
-        if P is None:
-            # use unfiltered reflector locations until we have enough data
-            P = np.array([rl.centroid for rl in self.reflector_locations_1])
-            Q = np.array([rl.centroid for rl in self.reflector_locations_2])
-            # weights remains unfiltered as well.
 
+        # Apply filters that depend on an existing transformation
+        # i.e. "adaptive outlier rejection"
+        if self.transformation:
+            outlier_filter = self._get_calib_pointcloud_outlier_filter()
+            if sum(outlier_filter) > 3:
+                # only filter if at least 3 points will remain after filtering, otherwise leave unchanged
+                P = P[outlier_filter]
+                Q = Q[outlier_filter]
+                weights = weights[outlier_filter]  # (need to filter weights as well!)
+
+
+        # Calculate transformation based on calibration point cloud
         logger.info("Calculating new transformation (using {0} / {1} point pairs)".format(
             str(len(Q)).rjust(3),
             str(len(self.reflector_locations_1)).rjust(3)
@@ -231,7 +232,6 @@ class PairCalibrator:
                     "normal_cosine_weight": parameters.get_param("normal_cosine_weight"),
                     "point_number_weight": parameters.get_param("point_number_weight"),
                     "gaussian_range_weight": parameters.get_param("gaussian_range_weight"),
-                    "outlier_mean_factor": parameters.get_param("outlier_mean_factor"),
                     "convergence_threshold": str(parameters.get_param("convergence_threshold")),
                     "minimum_iterations_until_convergence": parameters.get_param("minimum_iterations_until_convergence"),
 
@@ -301,15 +301,18 @@ class PairCalibrator:
             )
 
         # link the subweights via multiplication
-        return (
-                normal_cosine_weights * point_number_weights * gaussian_range_weights
-        )
+        return normal_cosine_weights * point_number_weights * gaussian_range_weights
 
-    def _get_location_filter(self) -> np.ndarray:
+
+    def _get_calib_pointcloud_outlier_filter(self) -> np.ndarray:
         """
-        Returns a filter boolean array of filters for which an initial transformation must be present.
-        Currently, this is only whether the distance between two transformed reflector locations is very large.
+        Returns a filter boolean array to filter the current calibration point cloud with.
+        This step is also referred to as "adaptive outlier rejection".
+        The resulting filter array is true for all point pairs in which the distance of the two
+        points **after applying the transformation** is less than `outlier_mean_factor * mean_distance`
+        with `mean_distance` being the mean distance of all point pairs in the current calibration point cloud.
         """
+        assert self.transformation is not None
         # drop point pairs whose points are comparably far apart from each other
         points1 = np.array([p.centroid for p in self.reflector_locations_1])
         points2 = np.array([p.centroid for p in self.reflector_locations_2])
