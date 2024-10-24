@@ -78,7 +78,7 @@ class OnlineCalibrator(Node):
             # Check if the default log directory exists, if not, create it
             if not os.path.exists(log_dir):
                 os.makedirs(log_dir)
-        except Exception as e:
+        except Exception:
             raise Exception("log_dir is not correct", log_dir)
 
         log_file_path = os.path.join(log_dir, 'transformations.log')

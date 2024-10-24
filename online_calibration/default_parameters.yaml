@@ -17,3 +17,4 @@
     "gaussian_range_weight": 0
     "convergence_threshold": [0.02, 0.02, 0.1]
     "minimum_iterations_until_convergence": 50
+    "disable_outlier_rejection": false
