@@ -49,6 +49,10 @@ class PairCalibrator:
         self.transformation: Transformation | None = None
         self._trafo_callback = trafo_callback
 
+        # initialize std values for convergence check
+        self.std_xyz = None
+        self.convergence_threshold = parameters.get_param("convergence_threshold")
+
         # logging for evaluation
         self._log = None
         self._logfile = None
@@ -147,22 +151,25 @@ class PairCalibrator:
             logger.info("Not enough point pairs yet")
             return
 
-        # Recalculate and publish transformation with new data
+        # Get calibration point cloud based on current reflector_locations
+        P = np.array([rl.centroid for rl in self.reflector_locations_1])
+        Q = np.array([rl.centroid for rl in self.reflector_locations_2])
         weights = self._calculate_weights()
-        P, Q, location_filter = None, None, None
-        if self.transformation:
-            location_filter = self._get_location_filter()
-            if sum(location_filter) > 3:
-                # only filter if at least 3 points will remain after filtering
-                P = np.array([rl.centroid for rl in _filter_list(self.reflector_locations_1, location_filter)])
-                Q = np.array([rl.centroid for rl in _filter_list(self.reflector_locations_2, location_filter)])
-                weights = list(_filter_list(weights, location_filter))
-        if P is None:
-            # use unfiltered reflector locations until we have enough data
-            P = np.array([rl.centroid for rl in self.reflector_locations_1])
-            Q = np.array([rl.centroid for rl in self.reflector_locations_2])
-            # weights remains unfiltered as well.
 
+        # Apply filters that depend on an existing transformation
+        # i.e. "adaptive outlier rejection"
+        if parameters.get_param("disable_outlier_rejection"):
+            logger.warning("Skipping outlier rejection! Only use this for tests!")
+        elif self.transformation:
+            outlier_filter = self._get_calib_pointcloud_outlier_filter()
+            if sum(outlier_filter) > 3:
+                # only filter if at least 3 points will remain after filtering, otherwise leave unchanged
+                P = P[outlier_filter]
+                Q = Q[outlier_filter]
+                weights = weights[outlier_filter]  # (need to filter weights as well!)
+
+
+        # Calculate transformation based on calibration point cloud
         logger.info("Calculating new transformation (using {0} / {1} point pairs)".format(
             str(len(Q)).rjust(3),
             str(len(self.reflector_locations_1)).rjust(3)
@@ -176,17 +183,12 @@ class PairCalibrator:
         P_transformed_to_Q = np.dot(P, self.transformation.R.T) + self.transformation.t
 
         # Calculate pairwise distances in x, y, z dimensions
-        distances_x = Q[:, 0] - P_transformed_to_Q[:, 0]
-        distances_y = Q[:, 1] - P_transformed_to_Q[:, 1]
-        distances_z = Q[:, 2] - P_transformed_to_Q[:, 2]
+        pointwise_distances = np.abs(Q - P_transformed_to_Q)
 
         # Calculate mean and standard deviation of distances
-        mean_x = np.mean(distances_x)
-        std_x = np.std(distances_x)
-        mean_y = np.mean(distances_y)
-        std_y = np.std(distances_y)
-        mean_z = np.mean(distances_z)
-        std_z = np.std(distances_z)
+        mean_xyz = np.mean(pointwise_distances, axis=0)
+        std_xyz = np.std(pointwise_distances, axis=0)
+        self.std_xyz = std_xyz
 
         # broadcast to websocket
         broadcast_pair_metadata(
@@ -195,20 +197,16 @@ class PairCalibrator:
             self.transformation,
             len(Q),
             len(self.reflector_locations_1),
-            [std_x, std_y, std_z]
+            std_xyz
         )
 
         if self._log is not None:
 
             # calculate maximum spread in x, y, z dimensions for P
-            max_extent_P_x = np.max(P[:, 0]) - np.min(P[:, 0])
-            max_extent_P_y = np.max(P[:, 1]) - np.min(P[:, 1])
-            max_extent_P_z = np.max(P[:, 2]) - np.min(P[:, 2])
+            max_extent_P = np.ptp(P, axis=0)
 
             # calculate maximum spread in x, y, z dimensions for Q
-            max_extent_Q_x = np.max(Q[:, 0]) - np.min(Q[:, 0])
-            max_extent_Q_y = np.max(Q[:, 1]) - np.min(Q[:, 1])
-            max_extent_Q_z = np.max(Q[:, 2]) - np.min(Q[:, 2])
+            max_extent_Q = np.ptp(Q, axis=0)
 
             # append logging information
             self._log["transformations"].append({
@@ -219,10 +217,27 @@ class PairCalibrator:
                 "topic_to": self.topic2,
                 "point_pairs_used": len(Q),
                 "point_pairs_total": len(self.reflector_locations_1),
-                "max_extent_P": {"x": max_extent_P_x, "y": max_extent_P_y, "z": max_extent_P_z},
-                "max_extent_Q": {"x": max_extent_Q_x, "y": max_extent_Q_y, "z": max_extent_Q_z},
-                "mean_distances": {"x": mean_x, "y": mean_y, "z": mean_z},
-                "std_distances": {"x": std_x, "y": std_y, "z": std_z},
+                "max_extent_P": max_extent_P,
+                "max_extent_Q": max_extent_Q,
+                "mean_distances": mean_xyz,
+                "std_distances": std_xyz,
+                "parameters": {
+                    "rel_intensity_threshold": parameters.get_param("relative intensity threshold"),
+                    "DBSCAN_epsilon": parameters.get_param("DBSCAN epsilon"),
+                    "DBSCAN_min_samples": parameters.get_param("DBSCAN min samples"),
+                    "max_neighbor_distance": parameters.get_param("maximum neighbor distance"),
+                    "min_velocity": parameters.get_param("minimum velocity"),
+                    "window_size": parameters.get_param("window size"),
+                    "max_vector_angle_deg": parameters.get_param("max. vector angle [deg]"),
+                    "outlier_mean_factor": parameters.get_param("outlier_mean_factor"),
+                    "max_point_number_change_ratio": parameters.get_param("max_point_number_change_ratio"),
+                    "normal_cosine_weight": parameters.get_param("normal_cosine_weight"),
+                    "point_number_weight": parameters.get_param("point_number_weight"),
+                    "gaussian_range_weight": parameters.get_param("gaussian_range_weight"),
+                    "convergence_threshold": str(parameters.get_param("convergence_threshold")),
+                    "minimum_iterations_until_convergence": parameters.get_param("minimum_iterations_until_convergence"),
+
+                }
             })
             # write to log file
             with open(self._logfile, "w") as lf:
@@ -288,15 +303,18 @@ class PairCalibrator:
             )
 
         # link the subweights via multiplication
-        return (
-                normal_cosine_weights * point_number_weights * gaussian_range_weights
-        )
+        return normal_cosine_weights * point_number_weights * gaussian_range_weights
 
-    def _get_location_filter(self) -> np.ndarray:
+
+    def _get_calib_pointcloud_outlier_filter(self) -> np.ndarray:
         """
-        Returns a filter boolean array of filters for which an initial transformation must be present.
-        Currently, this is only whether the distance between two transformed reflector locations is very large.
+        Returns a filter boolean array to filter the current calibration point cloud with.
+        This step is also referred to as "adaptive outlier rejection".
+        The resulting filter array is true for all point pairs in which the distance of the two
+        points **after applying the transformation** is less than `outlier_mean_factor * mean_distance`
+        with `mean_distance` being the mean distance of all point pairs in the current calibration point cloud.
         """
+        assert self.transformation is not None
         # drop point pairs whose points are comparably far apart from each other
         points1 = np.array([p.centroid for p in self.reflector_locations_1])
         points2 = np.array([p.centroid for p in self.reflector_locations_2])
@@ -305,6 +323,19 @@ class PairCalibrator:
         filter1 = distance < (np.mean(distance) * float(parameters.get_param("outlier_mean_factor")))
 
         return filter1
+    
+    def check_convergence(self) -> bool:
+        """
+        Check if the convergence criteria are met for this PairCalibrator.
+        :return: True if convergence is achieved, False otherwise.
+        """
+
+        if self.std_xyz is None:
+            return False
+
+        return (self.std_xyz[0] < self.convergence_threshold[0] and
+                self.std_xyz[1] < self.convergence_threshold[1] and
+                self.std_xyz[2] < self.convergence_threshold[2])
 
 
 def _filter_list(to_filter, boolean_array) -> Iterable:

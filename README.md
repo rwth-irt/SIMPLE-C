@@ -2,7 +2,9 @@
 ##  Uncertainty-aware Multi-LiDAR Extrinsic Calibration using a Simple Dynamic Target in Moving Feature-Sparse Environments
 
 <p align="center">
-  <img src="imgs/overview_black.png" />
+  <img 
+  src="imgs/overview_black.png" 
+  width="500"/>
 </p>
 
 This calibration tool can be used for calibrating multiple LiDAR sensors using a simple reflective target that is moved through the environment while being tracked. The tool was created to allow for pairwise calibration of LiDAR sensors on large vessels. The vessel is docked on the water introducing a unintendedly moving sensor platform and a moving environment (water surface), meaning that we cannot use any feature- or environment-based calibration algorithm. Also, we cannot use static targets as they would constantly move on the water surface. Further, as large vessels are often expensive to move, we created a tool that does not require any movement of the platform to calibrate sensors. We also omit the use of external auxiliary sensors such as IMU or GNSS, the need to manufacture complex shaped targets or algorithms that rely on geometric shape detection and calculation. Our calibration tool can be used indoor, outdoor and on waterside making the tool available for many users, applications and environments. Additionally, the tool is online-capable such that live feedback can be used to optimize the calibration procedure or parameters. For point cloud registration we rely on a simple weighted Kabsch Algorithm.
@@ -143,7 +145,7 @@ A PairCalibrator has a callback function `new_frame`, which is passed `Frame` ob
 **Reflector detection using Backtracking and Filtering**  
 A series of processing steps is used to identify the detector in the data *of a single sensor*.
 
-1. The reflector is expected to result in very intense points in the lidar frame. Hence points are filtered using a threshold value for the intensity channel. The threshold value is calculated adaptively so that a fixed ratio of points passes (configurable by the parameter `"relative intensity threshold"`).
+1. The reflector is expected to result in very intense points in the lidar frame. Hence points are filtered using a threshold value for the intensity channel. The threshold value is calculated adaptively: $I_\text{adapt.} = w_\text{I} \cdot I_\text{max}$ (configurable by the parameter `"relative intensity threshold"`).
 
 2. These remaining points are then expected to be from distinct bright objects. The DBSCAN algorithm is used for clustering, configurable by the parameters `"DBSCAN epsilon"` (in meters, as is all coordinate data from the sensors) and `"DBSCAN min samples"`.
 
@@ -162,15 +164,17 @@ To differentiate between the reflector and static reflective objects (or almost 
 
 5. If the reflector has been found in corresponding frames of both sensors, these locations are considered a *point pair*. These point pairs are stored and if more than three have been found, they can be passed to the Kabsch algorithm to calculate the transformation. As more data is acquired, the transformation is successively updated. This allows to run the calibration online in real-time. Using the sensitivity (uncertainty) of the current transformation, the operator can decide whether enough data has been collected for the required precision.
 
-6. As soon as an initial transformation exists, further filtering is applied to remove outliers that might have passed all filters described in step 3. To accomplish this, all point pairs of one sensor are transformed, which should ideally result in perfectly aligned point clouds. The mean distance between two adjacent points (after transformation) is calculated and point pairs with a much greater distance (`mean_distance * "outlier_mean_factor"`) are excluded before the transformation is calculated.
+6. **Adaptive Outlier Rejection:** As soon as an initial transformation exists, further filtering is applied to remove outliers that might have passed all filters described in step 3. To accomplish this, all point pairs of one sensor are transformed, which should ideally result in perfectly aligned point clouds. The mean distance between two adjacent points (after transformation) is calculated and point pairs with a much greater distance (`mean_distance * "outlier_mean_factor"`) are excluded before the transformation is calculated.
 
-7. The Kabsch algorithm accepts weights for each point pair. This allows for using weights to consider uncertainty or an indicator of the targets relaibility for calibration purposes. This weight is composed of three subweights:
-   - **Assumption**: The more points there are in a valid cluster, the more reliable is the estimation of the target center. 
+7. **The Kabsch algorithm** accepts weights for each point pair. This allows for using weights to consider uncertainty or an indicator of the targets relaibility for calibration purposes. This weight is composed of three subweights:
+   - **Assumption**: The more points there are in a valid cluster, the more reliable is the estimation of the target center. Activate the weight by setting `point_number_weight: 1`
       - **Weight** $w_1$: The number of points in the cluster, divided by the maximum number of all clusters identified as the reflector.
-   - **Assumption**: The position of the reflector's center can be calculated more accurately if the reflector surface points are faced directly towards the sensor.
+   - **Assumption**: The position of the reflector's center can be calculated more accurately if the reflector surface points are faced directly towards the sensor. Activate the weight by setting `normal_cosine_weight: 1`
       - **Weight** $w_2$: The cosine similarity of the normal vector of the reflector surface and the vector from sensor (in the origin) to the cluster centroid. The normal vector is calculated using an SVD, assuming the points to be distributed approximately planar. 
-   - **Assumption**: As the sensor outputs *x, y, z* coordinates but measures radial distance *r*, there is a range dependent error or uncertainty in the coordinates.
+   - **Assumption**: As the sensor outputs *x, y, z* coordinates but measures radial distance *r*, there is a range dependent error or uncertainty in the coordinates. Activate the weight by setting `gaussian_range_weight: 1`
       - **Weight** $w_3$: The weight is inversely proportional to the squared radial distance to the sensors origin. The further away the measurement is, the higher the uncertainty and the lower the weight.
    - **Combined Weight**: Multiplicative linkage of the subweights to avoid further hyperparameters and induce an AND-logic to the weights. $w = w_1 * w_2 * w_3$ The weights can individually be turned on/off.
+
+8. **Convergence:** The tool stops calibration if the standard deviation of the corresponding-point distances reach a certain threhsold in each dimension (x, y, z). A minimum runtime of $n$ iterations is required. You can set the convergence threshold for each dimension in `convergence_threshold: [x_thres, y_thres, z_thres]` and the minimum number of iterations until the criterion is used with `minimum_iterations_until_convergence`.
 
    Note that the algorithm only accepts a *single* weight per point *pair*, not per point. Therefore, the minimum weight of the points in a pair is used.

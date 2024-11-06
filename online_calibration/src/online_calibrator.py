@@ -78,7 +78,7 @@ class OnlineCalibrator(Node):
             # Check if the default log directory exists, if not, create it
             if not os.path.exists(log_dir):
                 os.makedirs(log_dir)
-        except Exception as e:
+        except Exception:
             raise Exception("log_dir is not correct", log_dir)
 
         log_file_path = os.path.join(log_dir, 'transformations.log')
@@ -129,6 +129,10 @@ class OnlineCalibrator(Node):
 
         # Initialize latest transformation variable
         self.latest_transformation = None
+
+        # initialize convergence parameters
+        self.minimum_iterations_until_convergence = parameters.get_param("minimum_iterations_until_convergence")
+        self.transformation_count = 0
 
         # Get all topics we have to subscribe to
         self.topics = set()  # collect the topics we have to subscribe to
@@ -236,6 +240,8 @@ class OnlineCalibrator(Node):
         self._update_transformations()
         self._broadcast_websocket()
 
+        self.transformation_count += 1
+
     def _get_specific_transformation(self, from_topic: str, to_topic: str) -> Transformation | None:
         """
         For two topics (from, to) returns the Transformation object of the specific pairCalibrator (or None).
@@ -272,30 +278,23 @@ class OnlineCalibrator(Node):
                 self.transformations[topic] = Transformation.unity()
                 continue
 
-            # Obtain all transformations of the transformation chain.
-            # (These might be unavailable, so we check afterwards)
+            # Obtain all transformations of the transformation chain
             trafos = [
                 self._get_specific_transformation(from_topic, to_topic)
                 for from_topic, to_topic in self.trafo_chains[topic]
             ]
 
-            # if None in trafos:
-            #     continue
-            # "if None in trafos" does not work because numpy is annoying
-            # minimal example: None in [array([1,2]), None] -> ValueError (I consider this a bug...)
-            # so we do it manually.
+            # Check if any entry in 'trafos' is None
             none_in_trafos = False
             for t in trafos:
                 if t is None:
                     none_in_trafos = True
                     break
             if none_in_trafos:
-                # we can not calculate this transformation yet, as the complete sequence of
-                # transformations to the main_sensor is not known
+                # Chain to main_sensor yet unkown, so no transformation to calculate
                 continue
 
-            # All transformations are available, proceed.
-            # Switch to homogeneous transformation matrices for easy chaining
+            # All transformations are available, proceed and switch to homogeneous transformation 
             trafos = [t.matrix for t in trafos]
             combined = trafos.pop(0)
             while trafos:
@@ -303,6 +302,14 @@ class OnlineCalibrator(Node):
             self.transformations[topic] = Transformation.from_matrix(combined)  # switch back to Transformation object
 
     def _broadcast_websocket(self):
+        """
+        Broadcast the latest transformation data and sensor metadata over the websocket.
+        
+        This method iterates over all topics in the transformations dictionary. For each topic,
+        it checks if there are any transformations available. If transformations are available,
+        it retrieves the corresponding PairCalibrator and broadcasts the sensor metadata, including
+        reflector locations and the transformation data, to all connected websocket clients.
+        """
         for topic in self.transformations:
             if not self.transformations[topic]:
                 continue
@@ -314,6 +321,18 @@ class OnlineCalibrator(Node):
             )
 
     def handle_send_latest_transformation(self, request, response):
+        """
+        Handle the request to send the latest transformation.
+
+        This method processes a request to send the latest transformation data. If no transformation
+        has been published yet, it sets the response to indicate failure. If a transformation is available,
+        it attempts to send the transformation data and sets the response accordingly. In case of an error
+        during the process, it catches the exception and sets the response to indicate failure.
+
+        :param request: The request object containing the details of the request.
+        :param response: The response object to be populated with the result of the request.
+        :return: The populated response object.
+        """
         if self.latest_transformation is None:
             response.success = False
             response.message = 'No transformation has been published yet.'
@@ -327,3 +346,20 @@ class OnlineCalibrator(Node):
                 response.success = False
                 response.message = f'Error sending latest transformation \n{str(e)}'
                 return response
+
+    def check_convergence(self) -> bool:
+        """
+        Check if the convergence criteria are met.
+        :return: True if convergence is achieved, False otherwise.
+        """
+        # Check if the minimum number of iterations has been reached
+        if not self.transformation_count >= self.minimum_iterations_until_convergence:
+            return False
+
+        # Check if one pair calibrator has not yet converged
+        for pcs in self.pair_calibrators.values():
+            for pc in pcs:
+                if not pc.check_convergence():
+                    return False
+        
+        return True
