@@ -1,5 +1,5 @@
 # SIMPLE-C
-##  Uncertainty-aware Multi-LiDAR Extrinsic Calibration using a Simple Dynamic Target in Moving Feature-Sparse Environments
+## Multi-LiDAR Extrinsic Calibration using a Simple Moving Reflective Target in Feature-Sparse Maritime Environments
 
 <p align="center">
   <img 
@@ -16,9 +16,7 @@ The repo is extended by the following modules:
 - [Visualizer](https://github.com/rwth-irt/SIMPLE-C-web_visualization.git)
 - [Transformation Broker Node](https://github.com/rwth-irt/SIMPLE-C-transformation_broker.git)
 
-  Code authors:
-  - Tim Rehbronn (Institute of Automatic Control, RWTH Aachen)
-  - Max Viehl (Institute of Automatic Control, RWTH Aachen)
+Code authors are Tim Rehbronn and Max Viehl; both are with the Institute of Automatic Control, RWTH Aachen.
 
 
 ## Running the calibration
