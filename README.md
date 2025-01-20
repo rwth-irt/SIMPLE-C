@@ -11,6 +11,15 @@ This calibration tool can be used for calibrating multiple LiDAR sensors using a
 
 We demonstrate a robust and simple online calibration tool for LiDAR sensors in maritime applications.
 
+The repo is extended by the following modules:
+- [Docker-Repostiory](https://github.com/rwth-irt/SIMPLE-C-docker.git)
+- [Visualizer](https://github.com/rwth-irt/SIMPLE-C-web_visualization.git)
+- [Transformation Broker Node](https://github.com/rwth-irt/SIMPLE-C-transformation_broker.git
+
+  Code authors:
+  - Tim Rehbronn (Institute of Automatic Control, RWTH Aachen)
+  - Max Viehl (Institute of Automatic Control, RWTH Aachen)
+
 
 ## Running the calibration
 
