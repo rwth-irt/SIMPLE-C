@@ -1,5 +1,5 @@
 # SIMPLE-C
-##  Uncertainty-aware Multi-LiDAR Extrinsic Calibration using a Simple Dynamic Target in Moving Feature-Sparse Environments
+##  SIMPLE-C: Multi-LiDAR Extrinsic Calibration using a Simple Moving Reflective Target in Feature-Sparse Maritime Environments
 
 <p align="center">
   <img 
@@ -11,6 +11,7 @@ This calibration tool can be used for calibrating multiple LiDAR sensors using a
 
 We demonstrate a robust and simple online calibration tool for LiDAR sensors in maritime applications.
 
+Code authors are Tim Rehbronn and Max Viehl, both are with the Institute of Automatic Control, RWTH Aachen.
 
 ## Running the calibration
 
@@ -175,6 +176,6 @@ To differentiate between the reflector and static reflective objects (or almost 
       - **Weight** $w_3$: The weight is inversely proportional to the squared radial distance to the sensors origin. The further away the measurement is, the higher the uncertainty and the lower the weight.
    - **Combined Weight**: Multiplicative linkage of the subweights to avoid further hyperparameters and induce an AND-logic to the weights. $w = w_1 * w_2 * w_3$ The weights can individually be turned on/off.
 
-8. **Convergence:** The tool stops calibration if the standard deviation of the corresponding-point distances reach a certain threhsold in each dimension (x, y, z). A minimum runtime of $n$ iterations is required. You can set the convergence threshold for each dimension in `convergence_threshold: [x_thres, y_thres, z_thres]` and the minimum number of iterations until the criterion is used with `minimum_iterations_until_convergence`.
+8. **Convergence:** The tool stops calibration if the standard deviation of the corresponding-point distances reach a certain threhsold in each dimension (x, y, z). A minimum runtime of $n$ iterations is required. Further, we have added convergence criteria for root mean square error of point-wise distances to evaluate the quality of the transformation. Additionally, we use the eigenvalues and condition number of the covariance matrix of $\mathcal{P}$ as indicators of geometric quality. You can set the convergence threshold for each dimension in `convergence_threshold: [x_thres, y_thres, z_thres]`, the minimum number of iterations until the criterion is used with `minimum_iterations_until_convergence`, the rmse threshold with `rmse_threshold`, the eigenvalue threshold with `min_eigenvalue_threshold` and the condition number with `condition_number_threshold`. Please note that the convergence is not properly tested or analyzed.
 
    Note that the algorithm only accepts a *single* weight per point *pair*, not per point. Therefore, the minimum weight of the points in a pair is used.
