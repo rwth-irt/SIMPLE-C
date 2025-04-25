@@ -1,0 +1,23 @@
+/online_calibration:
+  ros__parameters:
+    "log_path": "/DATA/log_files"
+    "eval_log_dir": "/DATA/eval_log_files"
+    "relative intensity threshold": 0.7
+    "DBSCAN epsilon": 0.4
+    "DBSCAN min samples": 9
+    "maximum neighbor distance": 0.4
+    "minimum velocity": 0.05
+    "window size": 12
+    "max. vector angle [deg]": 80.0
+    "sample_rate_Hz": 10.0
+    "outlier_mean_factor": 3.0
+    "max_point_number_change_ratio": 0.8
+    "normal_cosine_weight": 0
+    "point_number_weight": 0
+    "gaussian_range_weight": 0
+    "std_threshold": [0.02, 0.02, 0.1]
+    "rmse_threshold": 0.015
+    "min_eigenvalue_threshold": 0.001
+    "condition_number_threshold": 0.1
+    "minimum_iterations_until_convergence": 50
+    "disable_outlier_rejection": false
