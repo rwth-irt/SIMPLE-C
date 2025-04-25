@@ -11,7 +11,7 @@ This calibration tool can be used for calibrating multiple LiDAR sensors using a
 
 We demonstrate a robust and simple online calibration tool for LiDAR sensors in maritime applications.
 
-Code authors are Tim Rehbronn and Max Viehl, both are with the Institute of Automatic Control, RWTH Aachen.
+Code authors are Tim Rehbronn and [Max Viehl](mailto:15348204+m-viehl@users.noreply.github.com), both are with the Institute of Automatic Control, RWTH Aachen.
 
 ## Running the calibration
 
