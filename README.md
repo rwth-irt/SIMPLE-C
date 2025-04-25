@@ -15,6 +15,8 @@ Code authors are Tim Rehbronn and [Max Viehl](mailto:15348204+m-viehl@users.nore
 
 ## Running the calibration
 
+There are multiple repositories connected to the main repository to allow for running in a [docker container](https://github.com/rwth-irt/SIMPLE-C-docker), getting [transformation chains](https://github.com/rwth-irt/SIMPLE-C-transformation_broker) and having a [web-based visualization](https://github.com/rwth-irt/SIMPLE-C-web_visualization).
+
 ### Online calibration in ROS/Docker
 
 To use the tool, we propose to use our docker container with all dependencies and packages pre-installed and built: **[Docker-Repostiory](https://git-ce.rwth-aachen.de/g-nav-mob-irt/projects/galileonautic2plus/calibration/robosense_docker)**
