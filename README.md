@@ -138,13 +138,6 @@ In a single run of the program, multiple sensor pairs should be calibrated, whic
 **PairCalibrator: Timing of frame data**  
 A PairCalibrator has a callback function `new_frame`, which is passed `Frame` objects for both sensors (in real-time) as soon as they are recorded. As the Kabsch algorithm requires pairs of points, i.e. corresponding frames of both sensors, these frames are cached until data has been received from each sensor. Frame acquisition can not be triggered at the Lidar sensors used for this project. Therefore, frames are simply dropped if they are older than 60% of the expected time delay between two frames.
 
-<p align="center">
-  <img 
-  src="imgs/backtracking.png" 
-  width="500"
-  />
-</p>
-
 **Reflector detection using Backtracking and Filtering**  
 A series of processing steps is used to identify the detector in the data *of a single sensor*.
 
