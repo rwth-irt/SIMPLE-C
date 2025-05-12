@@ -54,7 +54,7 @@ class PairCalibrator:
         self.rmse = None
         self.min_eigenvalue  = None
         self.condition_number = None
-        self.convergence_threshold = parameters.get_param("std_threshold")
+        self.std_threshold = parameters.get_param("std_threshold")
         self.rmse_threshold = parameters.get_param("rmse_threshold")
         self.min_eigenvalue_threshold = parameters.get_param("min_eigenvalue_threshold")
         self.condition_number_threshold = parameters.get_param("condition_number_threshold")
@@ -268,9 +268,11 @@ class PairCalibrator:
                     "normal_cosine_weight": parameters.get_param("normal_cosine_weight"),
                     "point_number_weight": parameters.get_param("point_number_weight"),
                     "gaussian_range_weight": parameters.get_param("gaussian_range_weight"),
-                    "convergence_threshold": str(parameters.get_param("convergence_threshold")),
+                    "std_threshold": str(parameters.get_param("std_threshold")),
                     "minimum_iterations_until_convergence": parameters.get_param("minimum_iterations_until_convergence"),
-
+                    "rmse_threshold": parameters.get_param("rmse_threshold"),
+                    "min_eigenvalue_threshold": parameters.get_param("min_eigenvalue_threshold"),
+                    "condition_number_threshold": parameters.get_param("condition_number_threshold")
                 }
             })
             # write to log file
