@@ -22,9 +22,14 @@ parameter_definitions = {
     "normal_cosine_weight": "int",
     "point_number_weight": "int",
     "gaussian_range_weight": "int",
-    "convergence_threshold": "double_list",
     "minimum_iterations_until_convergence": "int",
     "disable_outlier_rejection": "boolean",
+    "std_threshold": "double_list",
+    "rmse_threshold": "float",
+    "min_eigenvalue_threshold": "float",
+    "condition_number_threshold": "float",
+    "minimum_iterations_until_convergence": "int",
+    "disable_outlier_rejection": "boolean"
 }
 
 
