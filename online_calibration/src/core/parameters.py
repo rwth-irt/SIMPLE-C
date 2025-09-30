@@ -23,13 +23,11 @@ parameter_definitions = {
     "point_number_weight": "int",
     "gaussian_range_weight": "int",
     "minimum_iterations_until_convergence": "int",
-    "disable_outlier_rejection": "boolean",
-    "std_threshold": "double_list",
-    "rmse_threshold": "float",
-    "min_eigenvalue_threshold": "float",
+    "sigma_min_w_threshold" : "float",
     "condition_number_threshold": "float",
-    "minimum_iterations_until_convergence": "int",
-    "disable_outlier_rejection": "boolean"
+    "disable_outlier_rejection": "boolean",
+    "rot_std_threshold_deg": "float",
+    "trans_std_threshold_m": "float",
 }
 
 

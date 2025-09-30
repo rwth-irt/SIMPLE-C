@@ -14,6 +14,7 @@ from .locate_reflector.track_marker import find_marker_single_frame
 from .reflector_location import ReflectorLocation
 from .transformation import Transformation, calc_transformation_scipy, apply_transformation
 from .websocket_server import broadcast_pair_metadata
+from .observability import compute_observability_metrics, build_measurement_covariance, parameter_covariance, compute_whitened_jacobian_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -50,14 +51,28 @@ class PairCalibrator:
         self._trafo_callback = trafo_callback
 
         # initialize values for convergence check
+        self.observability_nullspace_vector = None
+        self.observability_largest_sv = None
+        self.observability_smallest_sv = None
+        self.observability_condition_number = None
+        self.eigenvalues_P = None  # eigenvalues of covariance matrix of P
+        self.uncertainty_propagation_rotation_rad = None
+        self.uncertainty_propagation_rotation_deg = None
+        self.uncertainty_propagation_translation = None
         self.std_xyz = None
         self.rmse = None
         self.min_eigenvalue  = None
         self.condition_number = None
-        self.std_threshold = parameters.get_param("std_threshold")
-        self.rmse_threshold = parameters.get_param("rmse_threshold")
-        self.min_eigenvalue_threshold = parameters.get_param("min_eigenvalue_threshold")
+        self.sigma_min_w = None
+
+        # thresholds for the new Jacobian / covariance based convergence
+        self.rot_std_threshold_deg = parameters.get_param("rot_std_threshold_deg")
+        self.trans_std_threshold_m = parameters.get_param("trans_std_threshold_m")
         self.condition_number_threshold = parameters.get_param("condition_number_threshold")
+        self.prev_condition_number = None   # will be filled after first iteration
+        self.minimum_numbers_of_iterations_until_convergence = parameters.get_param("minimum_iterations_until_convergence")
+        self.sigma_min_w_threshold = parameters.get_param("sigma_min_w_threshold")
+
 
         # logging for evaluation
         self._log = None
@@ -135,6 +150,8 @@ class PairCalibrator:
         return ReflectorLocation(cluster_mean, cluster_points, cluster_index_in_frame), status
 
     def _new_frame_pair(self):
+        outlier_filter = None 
+
         # first call calculate_marker_location of latest frames
         reflector1, status1 = PairCalibrator.calc_marker_location(self._frame_buffer_1)
         reflector2, status2 = PairCalibrator.calc_marker_location(self._frame_buffer_2)
@@ -188,6 +205,65 @@ class PairCalibrator:
 
         # Apply the transformation to P
         P_transformed_to_Q = np.dot(P, self.transformation.R.T) + self.transformation.t
+        
+        
+        ################# CALCULATE STATISTICS #################
+        
+        # Compute Jacobian for observability analysis
+        largest_sv, smallest_sv, condition_number_obs, nullspace_vector, J = compute_observability_metrics(P_transformed_to_Q)
+        
+        dof_names = ['roll', 'pitch', 'yaw', 'tx', 'ty', 'tz']
+        dominant_dof = dof_names[int(np.argmax(np.abs(nullspace_vector)))]
+
+        # Store all three values
+        self.observability_nullspace_vector = nullspace_vector
+        self.observability_largest_sv   = largest_sv
+        self.observability_smallest_sv  = smallest_sv
+        self.observability_condition_number = condition_number_obs
+        self.dominant_dof = dominant_dof
+        
+        # Remember previous condition number for optional delta‑convergence check
+        if self.prev_condition_number is None:
+            self.prev_condition_number = self.observability_condition_number
+        self.delta_condition_number = abs(self.observability_condition_number - self.prev_condition_number)
+        self.prev_condition_number = self.observability_condition_number
+
+        
+        # ------------------------------------------------------------------
+        # Assemble raw cluster points for each pair to build sigma_e
+        # Each ReflectorLocation keeps the raw points of its cluster.
+        # We mirror the same outlier-filter (if applied) to keep alignment.
+        # ------------------------------------------------------------------
+        raw_clusters_1 = [rl.cluster_points for rl in self.reflector_locations_1]
+        raw_clusters_2 = [rl.cluster_points for rl in self.reflector_locations_2]
+
+        if not parameters.get_param("disable_outlier_rejection") and self.transformation and outlier_filter is not None:
+            # 'outlier_filter' was calculated above when we filtered P,Q,weights
+            raw_clusters_1 = list(np.array(raw_clusters_1, dtype=object)[outlier_filter])
+            raw_clusters_2 = list(np.array(raw_clusters_2, dtype=object)[outlier_filter])
+
+        # Merge both sensor‑clusters per pair to increase sample size
+        list_of_raw_clusters = [
+            np.vstack((c1, c2)) for c1, c2 in zip(raw_clusters_1, raw_clusters_2)
+        ]
+        
+        # Estimte the centroid covariance sigma_cluster for each pair of clusters
+        Sigma_e = build_measurement_covariance(list_of_raw_clusters)
+
+        # Parameter covariance sigma_(φ,t)
+        Sigma_params = parameter_covariance(J, Sigma_e)
+
+        # --- Whitened Jacobian ---
+        sigma_min_w, J_w = compute_whitened_jacobian_metrics(J, P, Sigma_e)
+        self.sigma_min_w = sigma_min_w
+
+        # Variances for the parameters
+        rot_var = np.diag(Sigma_params[:3, :3])   # roll, pitch, yaw
+        trans_var = np.diag(Sigma_params[3:, 3:]) # tx, ty, tz
+        
+        self.uncertainty_propagation_rotation_rad = np.sqrt(rot_var)
+        self.uncertainty_propagation_rotation_deg = self.uncertainty_propagation_rotation_rad * 180.0 / np.pi
+        self.uncertainty_propagation_translation = np.sqrt(trans_var)
 
         # Calculate pairwise distances in x, y, z dimensions
         pointwise_distances = np.abs(Q - P_transformed_to_Q)
@@ -204,6 +280,7 @@ class PairCalibrator:
         
         cov_P = np.cov(P.T)
         eigenvalues_P = np.linalg.eigvalsh(cov_P) # eigenvectors of covariance matrix give direction of maximum/minumum variance of point cloud
+        self.eigenvalues_P = eigenvalues_P
         
         if self.eigenvalues_P is not None and len(self.eigenvalues_P) == 3:
             min_eigenvalue = eigenvalues_P[0] # smallest eigenvalue
@@ -225,10 +302,10 @@ class PairCalibrator:
             self.transformation,
             len(Q),
             len(self.reflector_locations_1),
-            std_xyz,
-            rmse,
-            min_eigenvalue,
-            condition_number,
+            self.std_xyz,
+            self.rmse,
+            self.min_eigenvalue,
+            self.condition_number,
         )
 
         if self._log is not None:
@@ -248,6 +325,14 @@ class PairCalibrator:
                 "topic_to": self.topic2,
                 "point_pairs_used": len(Q),
                 "point_pairs_total": len(self.reflector_locations_1),
+                "observability_nullspace_vector": self.observability_nullspace_vector,
+                "observability_largest_sv": self.observability_largest_sv,
+                "observability_smallest_sv": self.observability_smallest_sv,
+                "observability_condition_number": self.observability_condition_number,
+                "dominant_dof": self.dominant_dof,
+                "uncertainty_propagation_rotation_rad": self.uncertainty_propagation_rotation_rad,
+                "uncertainty_propagation_rotation_deg": self.uncertainty_propagation_rotation_deg,
+                "uncertainty_propagation_translation": self.uncertainty_propagation_translation,
                 "max_extent_P": max_extent_P,
                 "max_extent_Q": max_extent_Q,
                 "mean_distances": mean_xyz,
@@ -268,11 +353,9 @@ class PairCalibrator:
                     "normal_cosine_weight": parameters.get_param("normal_cosine_weight"),
                     "point_number_weight": parameters.get_param("point_number_weight"),
                     "gaussian_range_weight": parameters.get_param("gaussian_range_weight"),
-                    "std_threshold": str(parameters.get_param("std_threshold")),
                     "minimum_iterations_until_convergence": parameters.get_param("minimum_iterations_until_convergence"),
-                    "rmse_threshold": parameters.get_param("rmse_threshold"),
-                    "min_eigenvalue_threshold": parameters.get_param("min_eigenvalue_threshold"),
-                    "condition_number_threshold": parameters.get_param("condition_number_threshold")
+                    "sigma_min_w_threshold": parameters.get_param("sigma_min_w_threshold"),
+                    "condition_number_threshold": parameters.get_param("condition_number_threshold"),
                 }
             })
             # write to log file
@@ -362,46 +445,33 @@ class PairCalibrator:
     
     def check_convergence(self) -> bool:
         """
-        Check if the convergence criteria are met for this PairCalibrator.
-        :return: True if convergence is achieved, False otherwise.
+        Convergence is declared if the smallest singular value of the
+        whitened and scaled Jacobian is above a threshold.
         """
-
-        if self.std_xyz is None:
-            logger.debug(f"ConvCheck ({self.topic1}<->{self.topic2}): Failed - std_xyz is None.")
+        if self.sigma_min_w is None:
             return False
-        if self.rmse is None:
-            logger.debug(f"ConvCheck ({self.topic1}<->{self.topic2}): Failed - rmse is None.")
-            return False
-        if self.eigenvalues_P is None:
-            logger.debug(f"ConvCheck ({self.topic1}<->{self.topic2}): Failed - eigenvalues_P is None.")
-            return False
-        if self.condition_number is None:
-             logger.debug(f"ConvCheck ({self.topic1}<->{self.topic2}): Failed - condition_number is None.")
-             return False
-        if len(self.std_xyz) != 3 or len(self.std_threshold) != 3:
-             logger.error(f"ConvCheck ({self.topic1}<->{self.topic2}): std_xyz or threshold length mismatch.")
-             return False
-        if len(self.eigenvalues_P) != 3:
-             logger.error(f"ConvCheck ({self.topic1}<->{self.topic2}): eigenvalues_P length mismatch.")
-             return False
-         
-        std_converged = (self.std_xyz[0] < self.std_threshold[0] and
-                         self.std_xyz[1] < self.std_threshold[1] and
-                         self.std_xyz[2] < self.std_threshold[2])
 
-        rmse_converged = self.rmse < self.rmse_threshold
-        
-        min_eigenvalue_converged = self.min_eigenvalue > self.min_eigenvalue_threshold
-        
-        cond_condition_number_converged = self.condition_number > self.condition_number_threshold
+        # Main convergence criterion from the paper
+        converged = self.sigma_min_w > self.sigma_min_w_threshold
 
-        all_converged = std_converged and rmse_converged and min_eigenvalue_converged and cond_condition_number_converged
+        # Also consider minimum number of iterations
+        enough_iterations = len(self.reflector_locations_1) >= self.minimum_numbers_of_iterations_until_convergence
         
-        if all_converged:
-            logger.info(f"ConvCheck ({self.topic1}<->{self.topic2}): Converged!")
-            return True
-        
-        return False
+        all_ok = converged and enough_iterations
+
+        if all_ok:
+            logger.info(
+                f"[{self.topic1}->{self.topic2}] Converged: "
+                f"σ_min(J_w) = {self.sigma_min_w:.4f} > {self.sigma_min_w_threshold:.4f}, "
+                f"Iterations = {len(self.reflector_locations_1)}"
+            )
+        elif self.sigma_min_w is not None:
+             logger.info(
+                f"[{self.topic1}->{self.topic2}] Not converged: "
+                f"σ_min(J_w) = {self.sigma_min_w:.4f} (Threshold: {self.sigma_min_w_threshold:.4f}), "
+                f"Iterations = {len(self.reflector_locations_1)} (Min: {self.minimum_numbers_of_iterations_until_convergence})"
+            )
+        return all_ok
 
 def _filter_list(to_filter, boolean_array) -> Iterable:
     return itertools.compress(to_filter, boolean_array)
