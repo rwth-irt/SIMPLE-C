@@ -92,15 +92,18 @@ def broadcast_pair_metadata(
         rmse: float,
         min_eigenvalue: float,
         condition_number: float,
+        icp_fitness_score: float,
 ):
     sensitivity_number = np.linalg.norm(trafo.R_sensitivity, ord="fro")  # frobenius norm, single value
+    # Ensure rotation matrix is a writable, contiguous array to avoid SciPy memoryview issues
+    R_writable = np.array(trafo.R, copy=True)
     data = {
         "type": "pair_metadata",
         "from_topic": from_topic,
         "to_topic": to_topic,
         "transformation": {
             "t": trafo.t,
-            "R_euler": Rotation.from_matrix(trafo.R).as_euler("xyz"),
+            "R_euler": Rotation.from_matrix(R_writable).as_euler("xyz"),
             "sensitivity_number": sensitivity_number,
         },
         "used_point_pairs": used_point_pairs,
@@ -109,6 +112,7 @@ def broadcast_pair_metadata(
         "rmse": rmse,
         "min_eigenvalue": min_eigenvalue,
         "condition_number": condition_number,
+        "icp_fitness_score": icp_fitness_score,
     }
     _broadcast_internal(data)
 

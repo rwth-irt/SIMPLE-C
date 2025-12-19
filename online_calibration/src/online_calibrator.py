@@ -195,7 +195,7 @@ class OnlineCalibrator(Node):
             when a new Transformation has been found.
         """
         # <<< Start Timer >>>
-        self._current_on_message_start_time = time.perf_counter()
+        start_time = time.perf_counter()
         self._transformation_calculated_in_this_call = False
         
         data = get_numpy_from_pc2(pc2, ["x", "y", "z", "intensity"])
@@ -216,16 +216,21 @@ class OnlineCalibrator(Node):
             pc.new_frame(frame)
             
         # <<< Stop Timer >>>
+        end_time = time.perf_counter()
+        duration_ms = (end_time - start_time) * 1000
+
+        # Pass the duration to the pair calibrators that were involved
+        for pc in self.pair_calibrators[topic]:
+            if pc.just_calibrated:
+                pc.add_duration_to_log(duration_ms)
+        
         if self._transformation_calculated_in_this_call:
-            end_time = time.perf_counter()
-            if self._current_on_message_start_time is not None:
-                duration_ms = (end_time - self._current_on_message_start_time) * 1000
-                self.logger.info(
-                    f"End-to-end transformation calculation time "
-                    f"(from {topic} reception to result): {duration_ms:.2f} ms"
-                )
-            # reset start time after use for this call chain
-            self._current_on_message_start_time = None
+            self.logger.info(
+                f"End-to-end transformation calculation time "
+                f"(from {topic} reception to result): {duration_ms:.2f} ms"
+            )
+        else:
+            self.logger.info(f"Frame processing time for {topic}: {duration_ms:.2f} ms")
 
     def new_transformation(self, trafo: Transformation, P_topic: str, Q_topic: str):
         """

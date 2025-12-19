@@ -62,3 +62,13 @@ class Frame:
             data array are required to allow for garbage collection.
         """
         return self.data[self.clustering == index, :3].copy()
+
+    @property
+    def get_points(self) -> np.ndarray:
+        """
+        Returns a numpy array with all points from `self.data`, excluding intensity.
+
+        :return: The points of the frame. Is a *new* numpy array, so no references to the underlying
+            data array are required to allow for garbage collection.
+        """
+        return self.data[:, :3].copy()

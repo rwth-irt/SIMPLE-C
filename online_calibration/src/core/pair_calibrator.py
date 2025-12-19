@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 import numpy as np
+from scipy.spatial import cKDTree
+from scipy.linalg import block_diag
 
 from . import parameters
 from .frame import Frame
@@ -14,7 +16,12 @@ from .locate_reflector.track_marker import find_marker_single_frame
 from .reflector_location import ReflectorLocation
 from .transformation import Transformation, calc_transformation_scipy, apply_transformation
 from .websocket_server import broadcast_pair_metadata
-from .observability import compute_observability_metrics, build_measurement_covariance, parameter_covariance, compute_whitened_jacobian_metrics
+from .observability import (
+    compute_observability_metrics,
+    build_measurement_covariance,
+    parameter_covariance,
+    compute_whitened_jacobian_metrics,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,16 +70,12 @@ class PairCalibrator:
         self.rmse = None
         self.min_eigenvalue  = None
         self.condition_number = None
-        self.sigma_min_w = None
 
-        # thresholds for the new Jacobian / covariance based convergence
-        self.rot_std_threshold_deg = parameters.get_param("rot_std_threshold_deg")
-        self.trans_std_threshold_m = parameters.get_param("trans_std_threshold_m")
-        self.condition_number_threshold = parameters.get_param("condition_number_threshold")
-        self.prev_condition_number = None   # will be filled after first iteration
+        # convergence and weighting parameters
         self.minimum_numbers_of_iterations_until_convergence = parameters.get_param("minimum_iterations_until_convergence")
-        self.sigma_min_w_threshold = parameters.get_param("sigma_min_w_threshold")
-
+        self.use_covariance_trace_weight = parameters.get_param("use_covariance_trace_weight")
+        self.shape_similarity_weight = parameters.get_param("shape_similarity_weight")
+        self.shape_similarity_k_factor = parameters.get_param("shape_similarity_k_factor")
 
         # logging for evaluation
         self._log = None
@@ -91,6 +94,14 @@ class PairCalibrator:
             self._logfile = logpath / filename
             logger.info(f"Logging to file: {self._logfile}")
 
+        # ICP refinement parameters and state
+        self.enable_icp_refinement = bool(parameters.get_param("enable_icp_refinement"))
+        self.icp_max_iterations = int(parameters.get_param("icp_max_iterations"))
+        self.icp_inlier_threshold = float(parameters.get_param("icp_inlier_threshold"))
+        self.icp_update_transformation = bool(parameters.get_param("icp_update_transformation"))
+        self.icp_fitness_score = None
+        self.just_calibrated = False
+
     def new_frame(self, f: Frame):
         """
         Call with new frame data for either topic1 or topic2. If a new transformation can be calculated using the
@@ -98,6 +109,8 @@ class PairCalibrator:
 
         :param f: The new frame.
         """
+        self.just_calibrated = False
+        
         # store temporarily
         if f.topic == self.topic1:
             self._last1 = f
@@ -149,9 +162,7 @@ class PairCalibrator:
         cluster_points = buffer[-1].get_cluster_points(cluster_index_in_frame)
         return ReflectorLocation(cluster_mean, cluster_points, cluster_index_in_frame), status
 
-    def _new_frame_pair(self):
-        outlier_filter = None 
-
+    def _new_frame_pair(self):            
         # first call calculate_marker_location of latest frames
         reflector1, status1 = PairCalibrator.calc_marker_location(self._frame_buffer_1)
         reflector2, status2 = PairCalibrator.calc_marker_location(self._frame_buffer_2)
@@ -177,7 +188,17 @@ class PairCalibrator:
         # Get calibration point cloud based on current reflector_locations
         P = np.array([rl.centroid for rl in self.reflector_locations_1])
         Q = np.array([rl.centroid for rl in self.reflector_locations_2])
-        weights = self._calculate_weights()
+
+        # Assemble raw cluster points for each pair to build centroid covariances for weighting
+        raw_clusters_1_for_weighting = [rl.cluster_points for rl in self.reflector_locations_1]
+        raw_clusters_2_for_weighting = [rl.cluster_points for rl in self.reflector_locations_2]
+
+        # Estimate the centroid covariance for each cluster of each sensor separately
+        from .observability import centroid_covariance
+        centroid_covariances_1 = [centroid_covariance(c) for c in raw_clusters_1_for_weighting]
+        centroid_covariances_2 = [centroid_covariance(c) for c in raw_clusters_2_for_weighting]
+
+        weights = self._calculate_weights(centroid_covariances_1, centroid_covariances_2)
 
         # Apply filters that depend on an existing transformation
         # i.e. "adaptive outlier rejection"
@@ -191,21 +212,41 @@ class PairCalibrator:
                     P = P[outlier_filter]
                     Q = Q[outlier_filter]
                     weights = weights[outlier_filter]  # (need to filter weights as well!)
+                    # Also filter the covariance lists that will be used for Sigma_e assembly
+                    centroid_covariances_1 = [cov for cov, keep in zip(centroid_covariances_1, outlier_filter) if keep]
+                    centroid_covariances_2 = [cov for cov, keep in zip(centroid_covariances_2, outlier_filter) if keep]
 
 
-        # Calculate transformation based on calibration point cloud
+        # Optional subsampling of calibration pairs: use every n-th pair
+        subsample_step = int(parameters.get_param("calibration_subsample_step"))
+        if subsample_step and subsample_step > 1:
+            P = P[::subsample_step]
+            Q = Q[::subsample_step]
+            if isinstance(weights, np.ndarray):
+                weights = weights[::subsample_step]
+            else:
+                weights = np.asarray(weights)[::subsample_step]
+            centroid_covariances_1 = centroid_covariances_1[::subsample_step]
+            centroid_covariances_2 = centroid_covariances_2[::subsample_step]
+
+        # Ensure enough pairs remain
+        if len(Q) < 3:
+            logger.info("Not enough point pairs after subsampling/filtering")
+            return
+
+        # Calculate transformation based on (optionally subsampled) calibration point cloud
         logger.info("Calculating new transformation (using {0} / {1} point pairs)".format(
             str(len(Q)).rjust(3),
             str(len(self.reflector_locations_1)).rjust(3)
         ))
 
         self.transformation = calc_transformation_scipy(P, Q, weights)
-        if self._trafo_callback:
-            self._trafo_callback(self.transformation, self.topic1, self.topic2)
+        
+        # The transformation is no longer immediately sent to the callback.
+        # Instead, it is processed by the new gating logic below.
 
         # Apply the transformation to P
-        P_transformed_to_Q = np.dot(P, self.transformation.R.T) + self.transformation.t
-        
+        P_transformed_to_Q = np.dot(P, self.transformation.R.T) + self.transformation.t        
         
         ################# CALCULATE STATISTICS #################
         
@@ -221,51 +262,47 @@ class PairCalibrator:
         self.observability_smallest_sv  = smallest_sv
         self.observability_condition_number = condition_number_obs
         self.dominant_dof = dominant_dof
+                
+        # --- Raw Clouds, ICP, Raw RQE, RMSE ---
+        if self.transformation:
+            latest_frame_1 = self._frame_buffer_1[-1]
+            latest_frame_2 = self._frame_buffer_2[-1]
+
+            raw_point_cloud_P = latest_frame_1.get_points
+            raw_point_cloud_Q = latest_frame_2.get_points
+
+            # raw_P_transformed_to_Q = np.dot(raw_point_cloud_P, self.transformation.R.T) + self.transformation.t
+
+            # optional: ICP refinement on raw point clouds
+            if self.enable_icp_refinement and raw_point_cloud_P.shape[0] > 0 and raw_point_cloud_Q.shape[0] > 0:
+                R_icp, t_icp, fitness = self._run_icp_point_to_point(
+                    src=raw_point_cloud_P,
+                    dst=raw_point_cloud_Q,
+                    R_init=self.transformation.R,
+                    t_init=self.transformation.t,
+                    max_iters=self.icp_max_iterations,
+                    inlier_thresh=self.icp_inlier_threshold
+                )
+                # log fitness score and optionally update transformation
+                self.icp_fitness_score = fitness
+                logger.info(f"ICP refinement: fitness={fitness:.3f}, iters={self.icp_max_iterations}")
+                if self.icp_update_transformation:
+                    self.transformation.R = np.array(R_icp, copy=True)
+                    self.transformation.t = np.array(t_icp, copy=True)
+                    
+        if self._trafo_callback:
+            self._trafo_callback(self.transformation, self.topic1, self.topic2)
+        self.just_calibrated = True
+
+        # variances for the parameters
+        # rot_var = np.diag(Sigma_params[:3, :3])   # roll, pitch, yaw
+        # trans_var = np.diag(Sigma_params[3:, 3:]) # tx, ty, tz
         
-        # Remember previous condition number for optional delta‑convergence check
-        if self.prev_condition_number is None:
-            self.prev_condition_number = self.observability_condition_number
-        self.delta_condition_number = abs(self.observability_condition_number - self.prev_condition_number)
-        self.prev_condition_number = self.observability_condition_number
+        # self.uncertainty_propagation_rotation_rad = np.sqrt(rot_var)
+        # self.uncertainty_propagation_rotation_deg = self.uncertainty_propagation_rotation_rad * 180.0 / np.pi
+        # self.uncertainty_propagation_translation = np.sqrt(trans_var)
 
-        
-        # ------------------------------------------------------------------
-        # Assemble raw cluster points for each pair to build sigma_e
-        # Each ReflectorLocation keeps the raw points of its cluster.
-        # We mirror the same outlier-filter (if applied) to keep alignment.
-        # ------------------------------------------------------------------
-        raw_clusters_1 = [rl.cluster_points for rl in self.reflector_locations_1]
-        raw_clusters_2 = [rl.cluster_points for rl in self.reflector_locations_2]
-
-        if not parameters.get_param("disable_outlier_rejection") and self.transformation and outlier_filter is not None:
-            # 'outlier_filter' was calculated above when we filtered P,Q,weights
-            raw_clusters_1 = list(np.array(raw_clusters_1, dtype=object)[outlier_filter])
-            raw_clusters_2 = list(np.array(raw_clusters_2, dtype=object)[outlier_filter])
-
-        # Merge both sensor‑clusters per pair to increase sample size
-        list_of_raw_clusters = [
-            np.vstack((c1, c2)) for c1, c2 in zip(raw_clusters_1, raw_clusters_2)
-        ]
-        
-        # Estimte the centroid covariance sigma_cluster for each pair of clusters
-        Sigma_e = build_measurement_covariance(list_of_raw_clusters)
-
-        # Parameter covariance sigma_(φ,t)
-        Sigma_params = parameter_covariance(J, Sigma_e)
-
-        # --- Whitened Jacobian ---
-        sigma_min_w, J_w = compute_whitened_jacobian_metrics(J, P, Sigma_e)
-        self.sigma_min_w = sigma_min_w
-
-        # Variances for the parameters
-        rot_var = np.diag(Sigma_params[:3, :3])   # roll, pitch, yaw
-        trans_var = np.diag(Sigma_params[3:, 3:]) # tx, ty, tz
-        
-        self.uncertainty_propagation_rotation_rad = np.sqrt(rot_var)
-        self.uncertainty_propagation_rotation_deg = self.uncertainty_propagation_rotation_rad * 180.0 / np.pi
-        self.uncertainty_propagation_translation = np.sqrt(trans_var)
-
-        # Calculate pairwise distances in x, y, z dimensions
+        # calculate pairwise distances in x, y, z dimensions
         pointwise_distances = np.abs(Q - P_transformed_to_Q)
 
         # Calculate mean and standard deviation and rmse of distances
@@ -306,8 +343,9 @@ class PairCalibrator:
             self.rmse,
             self.min_eigenvalue,
             self.condition_number,
+            self.icp_fitness_score
         )
-
+        
         if self._log is not None:
 
             # calculate maximum spread in x, y, z dimensions for P
@@ -330,9 +368,6 @@ class PairCalibrator:
                 "observability_smallest_sv": self.observability_smallest_sv,
                 "observability_condition_number": self.observability_condition_number,
                 "dominant_dof": self.dominant_dof,
-                "uncertainty_propagation_rotation_rad": self.uncertainty_propagation_rotation_rad,
-                "uncertainty_propagation_rotation_deg": self.uncertainty_propagation_rotation_deg,
-                "uncertainty_propagation_translation": self.uncertainty_propagation_translation,
                 "max_extent_P": max_extent_P,
                 "max_extent_Q": max_extent_Q,
                 "mean_distances": mean_xyz,
@@ -340,6 +375,7 @@ class PairCalibrator:
                 "rmse": rmse,
                 "condition_number": condition_number,
                 "min_eigenvalue": min_eigenvalue,
+                "icp_fitness_score": self.icp_fitness_score,
                 "parameters": {
                     "rel_intensity_threshold": parameters.get_param("relative intensity threshold"),
                     "DBSCAN_epsilon": parameters.get_param("DBSCAN epsilon"),
@@ -354,75 +390,140 @@ class PairCalibrator:
                     "point_number_weight": parameters.get_param("point_number_weight"),
                     "gaussian_range_weight": parameters.get_param("gaussian_range_weight"),
                     "minimum_iterations_until_convergence": parameters.get_param("minimum_iterations_until_convergence"),
-                    "sigma_min_w_threshold": parameters.get_param("sigma_min_w_threshold"),
-                    "condition_number_threshold": parameters.get_param("condition_number_threshold"),
+                    "use_covariance_trace_weight": parameters.get_param("use_covariance_trace_weight"),
+                    "shape_similarity_weight": parameters.get_param("shape_similarity_weight"),
+                    "shape_similarity_k_factor": parameters.get_param("shape_similarity_k_factor"),
+                    "enable_icefinement": parameters.get_param("enable_icp_refinement"),
+                    "icp_max_iterations": parameters.get_param("icp_max_iterations"),
+                    "icp_inlier_threshold": parameters.get_param("icp_inlier_threshold"),
+                    "icp_update_transformation": parameters.get_param("icp_update_transformation"),
+                    "calibration_subsample_step": parameters.get_param("calibration_subsample_step"),
                 }
             })
             # write to log file
             with open(self._logfile, "w") as lf:
                 json.dump(self._log, lf, cls=_NumpyEncoder, indent=2, allow_nan=False)
 
-    def _calculate_weights(self):
-        normal_weight = parameters.get_param("normal_cosine_weight")
-        number_weight = parameters.get_param("point_number_weight")
-        gaussian_weight = parameters.get_param("gaussian_range_weight")
+    def add_duration_to_log(self, duration_ms: float):
+        """Adds the processing duration to the last entry in the log."""
+        if self._log and self._log["transformations"]:
+            self._log["transformations"][-1]["processing_time_ms"] = duration_ms
+            # Re-write the log file with the new data
+            with open(self._logfile, "w") as lf:
+                json.dump(self._log, lf, cls=_NumpyEncoder, indent=2, allow_nan=False)
 
-        if normal_weight == 0 and number_weight == 0 and gaussian_weight == 0:
-            # use unity weights if no subweights are used
-            return np.ones((len(self.reflector_locations_1)))
+    def _calculate_weights(self, centroid_covariances_1: list[np.ndarray], centroid_covariances_2: list[np.ndarray]):
+        """
+        Calculates the weights for the point pairs by multiplicatively combining different quality metrics.
+        Each metric can be enabled or disabled via parameters. The final weight for each pair is the product
+        of all enabled component weights.
+        """
+        num_pairs = len(self.reflector_locations_1)
+        final_weights = np.ones(num_pairs)
 
-        if normal_weight == 0:
-            # use unity weights if normal weight is not used
-            normal_cosine_weights = np.ones((len(self.reflector_locations_1)))
-        else:
-            # normal cosine weight for each point pair (choose smaller value per pair)
-            normal_cosine_weights = np.min(
+        # --- 1. Heuristic: Normal Cosine Similarity ---
+        normal_weight_factor = parameters.get_param("normal_cosine_weight")
+        if normal_weight_factor > 0:
+            normal_cosine_scores = np.min(
                 np.stack((
                     [rl.normal_cosine_weight for rl in self.reflector_locations_1],
                     [rl.normal_cosine_weight for rl in self.reflector_locations_2]
                 )),
                 axis=0
             )
+            # A score of 1 is good, 0 is bad. Weight = 1 - factor * (1 - score)
+            component_weights = 1 - normal_weight_factor * (1 - normal_cosine_scores)
+            final_weights *= component_weights
 
-        if number_weight == 0:
-            # use unity weights if number weight is not used
-            point_number_weights = np.ones((len(self.reflector_locations_1)))
-        else:
-            # weight from number of points in cluster
-            max_points_in_cluster = np.max(
-                [rl.number_of_points_in_cluster for rl in self.reflector_locations_1] +
-                [rl.number_of_points_in_cluster for rl in self.reflector_locations_2]
-            )  # number of points in biggest cluster of all sensor's frames combined
-
-            point_number_weights = np.min(
+        # --- 2. Heuristic: Point Number ---
+        number_weight_factor = parameters.get_param("point_number_weight")
+        if number_weight_factor > 0:
+            all_points = [rl.number_of_points_in_cluster for rl in self.reflector_locations_1] + \
+                         [rl.number_of_points_in_cluster for rl in self.reflector_locations_2]
+            max_points_in_cluster = np.max(all_points) if all_points else 1
+            
+            point_number_scores = np.min(
                 np.stack((
                     [rl.number_of_points_in_cluster / max_points_in_cluster for rl in self.reflector_locations_1],
                     [rl.number_of_points_in_cluster / max_points_in_cluster for rl in self.reflector_locations_2]
                 )),
                 axis=0
-            )  # weight number in each cluster relative to maximum, choose smaller value per pair
+            )
+            component_weights = 1 - number_weight_factor * (1 - point_number_scores)
+            final_weights *= component_weights
 
-        if gaussian_weight == 0:
-            # use unity weights if gaussian range weight is not used
-            gaussian_range_weights = np.ones((len(self.reflector_locations_1)))
-        else:
-            # maximum squared range for normalization
+        # --- 3. Heuristic: Gaussian Range ---
+        gaussian_weight_factor = parameters.get_param("gaussian_range_weight")
+        if gaussian_weight_factor > 0:
             max_range_squared_inv = 1 / (200 ** 2)
             min_range_squared_inv = 1 / (0.5 ** 2)
+            range_diff = min_range_squared_inv - max_range_squared_inv
+            
+            if range_diff > 1e-9:
+                gaussian_range_scores = np.min(
+                    np.stack((
+                        np.clip([(rl.range_squared_inv - max_range_squared_inv) / range_diff for rl in self.reflector_locations_1], 0, 1),
+                        np.clip([(rl.range_squared_inv - max_range_squared_inv) / range_diff for rl in self.reflector_locations_2], 0, 1)
+                    )),
+                    axis=0
+                )
+                component_weights = 1 - gaussian_weight_factor * (1 - gaussian_range_scores)
+                final_weights *= component_weights
 
-            # weight for gaussian range uncertainty, take lowest weight (maximum range)
-            gaussian_range_weights = np.min(
-                np.stack((
-                    [(rl.range_squared_inv - max_range_squared_inv) / (min_range_squared_inv - max_range_squared_inv)
-                     for rl in self.reflector_locations_1],
-                    [(rl.range_squared_inv - max_range_squared_inv) / (min_range_squared_inv - max_range_squared_inv)
-                     for rl in self.reflector_locations_2]
-                )),
-                axis=0
-            )
+        # --- 4. Covariance Trace-based Weight ---
+        if self.use_covariance_trace_weight:
+            with np.errstate(divide='ignore'):
+                weights1 = 1.0 / np.array([np.trace(c) for c in centroid_covariances_1]) # sensor 1
+                weights2 = 1.0 / np.array([np.trace(c) for c in centroid_covariances_2]) # sensor 2
+            
+            weights1[np.isinf(weights1)] = 1e12
+            weights2[np.isinf(weights2)] = 1e12
 
-        # link the subweights via multiplication
-        return normal_cosine_weights * point_number_weights * gaussian_range_weights
+            component_weights = np.minimum(weights1, weights2)
+
+            if component_weights.size > 0 and np.mean(component_weights) > 1e-9:
+                component_weights /= np.mean(component_weights) # Normalize to mean 1
+            
+            final_weights *= component_weights
+
+        # --- 5. Shape Similarity Weight ---
+        shape_weight_factor = self.shape_similarity_weight
+        if shape_weight_factor > 0:
+            k = self.shape_similarity_k_factor
+            shape_distances = []
+            for rl1, rl2 in zip(self.reflector_locations_1, self.reflector_locations_2):
+                cluster1 = rl1.cluster_points
+                cluster2 = rl2.cluster_points
+
+                if cluster1.shape[0] < 3 or cluster2.shape[0] < 3:
+                    shape_distances.append(np.inf)
+                    continue
+
+                cov1 = np.cov(cluster1.T)
+                cov2 = np.cov(cluster2.T)
+                eig1 = np.linalg.eigvalsh(cov1)
+                eig2 = np.linalg.eigvalsh(cov2)
+                trace1 = np.sum(eig1)
+                trace2 = np.sum(eig2)
+
+                if trace1 < 1e-9 or trace2 < 1e-9:
+                    shape_distances.append(np.inf)
+                    continue
+
+                form_vector1 = np.sort(eig1) / trace1
+                form_vector2 = np.sort(eig2) / trace2
+                
+                dist = np.linalg.norm(form_vector1 - form_vector2)
+                shape_distances.append(dist)
+            
+            shape_distances = np.array(shape_distances)
+            # An exp-based score: 1 for perfect match (dist=0), -> 0 for large dist
+            exp_scores = np.exp(-k * shape_distances)
+            # Final component weight
+            component_weights = 1 - shape_weight_factor * (1 - exp_scores)
+            final_weights *= component_weights
+
+        return final_weights
 
 
     def _get_calib_pointcloud_outlier_filter(self) -> np.ndarray:
@@ -443,35 +544,61 @@ class PairCalibrator:
 
         return filter1
     
+    def _run_icp_point_to_point(self, src: np.ndarray, dst: np.ndarray, R_init: np.ndarray, t_init: np.ndarray,
+                                max_iters: int, inlier_thresh: float) -> tuple[np.ndarray, np.ndarray, float]:
+        """
+        Point-to-point ICP using Open3D's implementation.
+        - Aligns `src` (Nx3) to `dst` (Mx3)
+        - Uses `inlier_thresh` as the max correspondence distance
+        - Returns refined (R, t) and fitness in [0,1]
+        """
+        if src.shape[0] == 0 or dst.shape[0] == 0:
+            logger.warning("ICP refinement skipped due to empty source or destination point cloud.")
+            return R_init, t_init, 0.0
+
+        try:
+            import open3d as o3d
+        except (ImportError, OSError) as e:
+            # ImportError: package not installed
+            # OSError: missing native libs (e.g. libGL.so.1) in headless/container environment
+            logger.warning(f"Open3D unavailable (reason: {e}). Skipping ICP refinement.")
+            return R_init, t_init, 0.0
+
+        src_pc = o3d.geometry.PointCloud()
+        dst_pc = o3d.geometry.PointCloud()
+        src_pc.points = o3d.utility.Vector3dVector(np.asarray(src, dtype=np.float64))
+        dst_pc.points = o3d.utility.Vector3dVector(np.asarray(dst, dtype=np.float64))
+
+        T_init = np.eye(4, dtype=np.float64)
+        T_init[:3, :3] = np.asarray(R_init, dtype=np.float64)
+        T_init[:3, 3] = np.asarray(t_init, dtype=np.float64)
+
+        estimation = o3d.pipelines.registration.TransformationEstimationPointToPoint()
+        criteria = o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=int(max_iters))
+        
+        result = o3d.pipelines.registration.registration_icp(
+            src_pc,
+            dst_pc,
+            float(inlier_thresh),
+            T_init,
+            estimation,
+            criteria
+        )
+        
+        T = np.asarray(result.transformation, dtype=np.float64)
+        R_ref = T[:3, :3]
+        t_ref = T[:3, 3]
+        fitness = float(result.fitness)
+
+        return R_ref, t_ref, fitness
+    
+
     def check_convergence(self) -> bool:
         """
-        Convergence is declared if the smallest singular value of the
-        whitened and scaled Jacobian is above a threshold.
+        Check if this pair calibrator has converged.
+        Currently based on minimum number of iterations.
         """
-        if self.sigma_min_w is None:
-            return False
-
-        # Main convergence criterion from the paper
-        converged = self.sigma_min_w > self.sigma_min_w_threshold
-
-        # Also consider minimum number of iterations
-        enough_iterations = len(self.reflector_locations_1) >= self.minimum_numbers_of_iterations_until_convergence
-        
-        all_ok = converged and enough_iterations
-
-        if all_ok:
-            logger.info(
-                f"[{self.topic1}->{self.topic2}] Converged: "
-                f"σ_min(J_w) = {self.sigma_min_w:.4f} > {self.sigma_min_w_threshold:.4f}, "
-                f"Iterations = {len(self.reflector_locations_1)}"
-            )
-        elif self.sigma_min_w is not None:
-             logger.info(
-                f"[{self.topic1}->{self.topic2}] Not converged: "
-                f"σ_min(J_w) = {self.sigma_min_w:.4f} (Threshold: {self.sigma_min_w_threshold:.4f}), "
-                f"Iterations = {len(self.reflector_locations_1)} (Min: {self.minimum_numbers_of_iterations_until_convergence})"
-            )
-        return all_ok
+        return len(self.reflector_locations_1) >= self.minimum_numbers_of_iterations_until_convergence
 
 def _filter_list(to_filter, boolean_array) -> Iterable:
     return itertools.compress(to_filter, boolean_array)

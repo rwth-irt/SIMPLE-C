@@ -22,12 +22,20 @@ parameter_definitions = {
     "normal_cosine_weight": "int",
     "point_number_weight": "int",
     "gaussian_range_weight": "int",
-    "minimum_iterations_until_convergence": "int",
-    "sigma_min_w_threshold" : "float",
-    "condition_number_threshold": "float",
+    "use_covariance_trace_weight": "boolean",
+    "shape_similarity_weight": "float",
+    "shape_similarity_k_factor": "float",
     "disable_outlier_rejection": "boolean",
-    "rot_std_threshold_deg": "float",
-    "trans_std_threshold_m": "float",
+    "minimum_iterations_until_convergence": "int",
+    "sensor_sigma_range_m": "float",
+    "sensor_sigma_azimuth_deg": "float",
+    "sensor_sigma_elevation_deg": "float",
+    # ICP refinement toggles
+    "enable_icp_refinement": "boolean",
+    "icp_max_iterations": "int",
+    "icp_inlier_threshold": "float",
+    "icp_update_transformation": "boolean",
+    "calibration_subsample_step": "int",
 }
 
 

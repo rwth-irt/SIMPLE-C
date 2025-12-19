@@ -3,21 +3,29 @@
     "log_path": "/DATA/log_files"
     "eval_log_dir": "/DATA/eval_log_files"
     "relative intensity threshold": 0.7
-    "DBSCAN epsilon": 0.7
-    "DBSCAN min samples": 20
-    "maximum neighbor distance": 0.6
+    "DBSCAN epsilon": 0.4
+    "DBSCAN min samples": 9
+    "maximum neighbor distance": 0.4
     "minimum velocity": 0.05
-    "window size": 8
+    "window size": 12
     "max. vector angle [deg]": 80.0
-    "sample_rate_Hz": 9.8
+    "sample_rate_Hz": 10.0
     "outlier_mean_factor": 3.0
     "max_point_number_change_ratio": 0.8
     "normal_cosine_weight": 0
     "point_number_weight": 0
     "gaussian_range_weight": 0
-    "minimum_iterations_until_convergence": 400
+    "use_covariance_trace_weight": False
+    "shape_similarity_weight": 0.0
+    "shape_similarity_k_factor": 10.0
     "disable_outlier_rejection": True
-    "sigma_min_w_threshold": 0.0001  # threshold for smallest singular value of whitened Jacobian
-    "condition_number_threshold": 1000.0  # OPTIONAL: condition number threshold for convergence
-    "rot_std_threshold_deg": 0.3  # OPTIONAL: max 0.5 degree per axis
-    "trans_std_threshold_m": 0.01  # OPTIONAL: max 2 cm per axis
+    "minimum_iterations_until_convergence": 400
+    "sensor_sigma_range_m": 0.05
+    "sensor_sigma_azimuth_deg": 0.2 
+    "sensor_sigma_elevation_deg": 0.2
+    # ICP refinement
+    "enable_icp_refinement": True
+    "icp_inlier_threshold": 0.02
+    "icp_max_iterations": 100
+    "icp_update_transformation": True
+    "calibration_subsample_step": 1  # use every n-th calibration pair (1 = use all)
